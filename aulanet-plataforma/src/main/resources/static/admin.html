@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Administração — Aula.net</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎓</text></svg>">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="js/api.js"></script>
+</head>
+<body>
+<nav class="nav" id="nav"></nav>
+<main class="container">
+    <div class="entre"><h1 style="margin:0">Administração da plataforma</h1>
+        <button class="btn btn-sec" onclick="processarAtrasos()">Processar atrasos agora</button></div>
+
+    <div class="abas mt">
+        <button class="aba ativa" data-alvo="pRel">Relatório global</button>
+        <button class="aba" data-alvo="pRep">Repasses</button>
+        <button class="aba" data-alvo="pOf">Ofertas e comissões</button>
+        <button class="aba" data-alvo="pUs">Usuários</button>
+        <button class="aba" data-alvo="pDisc">Disciplinas</button>
+    </div>
+
+    <!-- RF18 -->
+    <section id="pRel" class="painel ativo">
+        <div class="grid grid-4" id="kpis"></div>
+        <div class="card mt"><h3>Aulas por status</h3><div class="barras" id="porStatus"></div></div>
+    </section>
+
+    <section id="pRep" class="painel"><div class="card tabela-wrap" id="repasses"></div></section>
+    <section id="pOf" class="painel"><div class="card tabela-wrap" id="ofertas"></div></section>
+
+    <section id="pUs" class="painel">
+        <div class="grid grid-2">
+            <form class="card" id="formUsuario">
+                <h3>Novo usuário</h3>
+                <div class="campo"><label>Papel</label><select id="uPapel"><option>ALUNO</option><option>PROFESSOR</option><option>ADMIN</option></select></div>
+                <div class="campo"><label>Nome</label><input id="uNome" required></div>
+                <div class="campo"><label>E-mail</label><input id="uEmail" type="email" required></div>
+                <div class="campo"><label>CPF</label><input id="uCpf"></div>
+                <div class="campo"><label>Senha</label><input id="uSenha" type="password" minlength="6" required></div>
+                <button class="btn">Cadastrar</button>
+            </form>
+            <div class="card tabela-wrap" id="usuarios"></div>
+        </div>
+    </section>
+
+    <section id="pDisc" class="painel">
+        <div class="grid grid-2">
+            <form class="card" id="formDisc">
+                <h3>Nova disciplina</h3>
+                <div class="campo"><label>Nome</label><input id="dNome" required maxlength="100"></div>
+                <button class="btn">Adicionar</button>
+            </form>
+            <div class="card" id="disciplinas"></div>
+        </div>
+    </section>
+</main>
+
+<script>
+    const eu = Api.exigir('ADMIN');
+
+    async function carregarRelatorio() {
+        const r = await Api.get('/api/admin/relatorio');
+        document.getElementById('kpis').innerHTML = `
+            <div class="card kpi"><div class="rotulo">Total de aulas</div><div class="valor">${r.totalAulas}</div></div>
+            <div class="card kpi verde"><div class="rotulo">Receita da plataforma</div><div class="valor">${fmt.moeda(r.receitaPlataforma)}</div><div class="pequeno suave">soma das comissões</div></div>
+            <div class="card kpi laranja"><div class="rotulo">Repasses pendentes</div><div class="valor">${fmt.moeda(r.repassesPendentesValor)}</div><div class="pequeno suave">${r.repassesPendentesQtd} repasse(s)</div></div>
+            <div class="card kpi verde"><div class="rotulo">Repasses realizados</div><div class="valor">${fmt.moeda(r.repassesRealizadosValor)}</div></div>
+            <div class="card kpi"><div class="rotulo">Usuários</div><div class="valor">${r.totalUsuarios}</div><div class="pequeno suave">${r.totalAlunos} alunos · ${r.totalProfessores} professores</div></div>
+            <div class="card kpi vermelho"><div class="rotulo">Parcelas atrasadas</div><div class="valor">${r.parcelasAtrasadas}</div></div>`;
+        const max = Math.max(1, ...Object.values(r.aulasPorStatus));
+        document.getElementById('porStatus').innerHTML = Object.entries(r.aulasPorStatus).map(([s, n]) => `
+            <div class="barra-col"><span class="v">${n}</span><div class="barra" style="height:${n / max * 150}px"></div><span class="m">${fmt.rotulo(s)}</span></div>`).join('');
+    }
+
+    async function carregarRepasses() {
+        const rs = await Api.get('/api/admin/repasses');
+        document.getElementById('repasses').innerHTML = rs.length ? `<table>
+            <tr><th>Professor</th><th>Aula</th><th>Aluno</th><th class="num">Bruto</th><th class="num">Comissão</th><th class="num">Líquido</th><th>Pagamento</th><th>Status</th><th></th></tr>
+            ${rs.map(r => `<tr><td>${esc(r.professorNome)}</td><td>${fmt.data(r.dataAula)} · ${esc(r.disciplina)}</td><td>${esc(r.alunoNome)}</td>
+                <td class="num">${fmt.moeda(r.valorBruto)}</td><td class="num">${fmt.moeda(r.valorComissao)}</td><td class="num"><strong>${fmt.moeda(r.valorLiquido)}</strong></td>
+                <td>${r.pagamentoQuitado ? selo('PAGO') : selo('PENDENTE')}</td><td>${selo(r.status)}</td>
+                <td>${r.status === 'PENDENTE' ? `<button class="btn btn-verde btn-sm" onclick="realizar(${r.id}, ${r.pagamentoQuitado})">Realizar</button>` : ''}</td></tr>`).join('')}</table>`
+            : '<div class="vazio">Nenhum repasse.</div>';
+    }
+    async function realizar(id, quitado) {
+        if (!confirm(quitado ? 'Confirmar o repasse ao professor?' : 'O aluno ainda não quitou este pagamento. Antecipar o repasse mesmo assim?')) return;
+        await acao(() => Api.patch(`/api/admin/repasses/${id}/realizar`), 'Repasse realizado.');
+        carregarRepasses();
+    }
+
+    async function carregarOfertas() {
+        const os = await Api.get('/api/admin/ofertas');
+        document.getElementById('ofertas').innerHTML = `<table>
+            <tr><th>Professor</th><th>Disciplina</th><th>Modalidade</th><th class="num">Valor/h</th><th>Comissão (%)</th></tr>
+            ${os.map(o => `<tr><td>${esc(o.professorNome)}</td><td>${esc(o.disciplina)}</td><td>${selo(o.modalidade)}</td><td class="num">${fmt.moeda(o.valorHora)}</td>
+                <td><div class="linha" style="flex-wrap:nowrap"><input type="number" min="0" max="100" step="0.5" value="${o.percentualComissao}" id="com${o.id}" style="max-width:100px">
+                    <button class="btn btn-sm" style="flex:0 0 auto" onclick="salvarComissao(${o.id})">Salvar</button></div></td></tr>`).join('')}</table>`;
+    }
+    async function salvarComissao(id) {
+        await acao(() => Api.patch(`/api/admin/ofertas/${id}/comissao`, { percentualComissao: +document.getElementById('com' + id).value }), 'Comissão atualizada.');
+    }
+
+    async function carregarUsuarios() {
+        const us = await Api.get('/api/admin/usuarios');
+        document.getElementById('usuarios').innerHTML = `<h3>Usuários (${us.length})</h3><table>
+            <tr><th>Nome</th><th>E-mail</th><th>Papel</th></tr>
+            ${us.map(u => `<tr><td>${esc(u.nome)}</td><td>${esc(u.email)}</td><td>${selo(u.papel)}</td></tr>`).join('')}</table>`;
+    }
+    document.getElementById('formUsuario').addEventListener('submit', async ev => {
+        ev.preventDefault();
+        await acao(() => Api.post('/api/admin/usuarios', { nome: uNome.value, email: uEmail.value, cpf: uCpf.value || null, senha: uSenha.value, papel: uPapel.value }), 'Usuário criado.');
+        ev.target.reset(); carregarUsuarios();
+    });
+
+    async function carregarDisciplinas() {
+        const ds = await Api.get('/api/disciplinas');
+        document.getElementById('disciplinas').innerHTML = '<h3>Disciplinas</h3>' + ds.map(d => `<span class="selo" style="margin:3px">${esc(d.nome)}</span>`).join('');
+    }
+    document.getElementById('formDisc').addEventListener('submit', async ev => {
+        ev.preventDefault();
+        await acao(() => Api.post('/api/admin/disciplinas', { nome: dNome.value }), 'Disciplina adicionada.');
+        ev.target.reset(); carregarDisciplinas();
+    });
+
+    async function processarAtrasos() {
+        const r = await acao(() => Api.post('/api/admin/processar-atrasos'));
+        toast(`${r.parcelasAtualizadas} parcela(s) em atraso atualizada(s).`);
+        carregarRelatorio();
+    }
+
+    if (eu) {
+        ativarAbas(alvo => ({ pRel: carregarRelatorio, pRep: carregarRepasses, pOf: carregarOfertas, pUs: carregarUsuarios, pDisc: carregarDisciplinas })[alvo]());
+        carregarRelatorio();
+    }
+</script>
+</body>
+</html>

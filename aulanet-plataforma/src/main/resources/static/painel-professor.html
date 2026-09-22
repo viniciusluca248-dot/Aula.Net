@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Painel do professor — Aula.net</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎓</text></svg>">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="js/api.js"></script>
+</head>
+<body>
+<nav class="nav" id="nav"></nav>
+<main class="container">
+    <div class="entre"><h1 style="margin:0">Painel do professor</h1>
+        <a class="btn btn-sec" id="linkPerfil" href="#">Ver meu perfil público</a></div>
+
+    <div class="abas mt">
+        <button class="aba ativa" data-alvo="pSolic">Solicitações <span class="selo" id="qtdSolic">0</span></button>
+        <button class="aba" data-alvo="pAgenda">Agenda semanal</button>
+        <button class="aba" data-alvo="pAulas">Aulas</button>
+        <button class="aba" data-alvo="pOfertas">Meus serviços</button>
+        <button class="aba" data-alvo="pFin">Financeiro</button>
+        <button class="aba" data-alvo="pHist">Histórico</button>
+        <button class="aba" data-alvo="pPerfil">Perfil</button>
+    </div>
+
+    <!-- RF08 -->
+    <section id="pSolic" class="painel ativo"><div class="card tabela-wrap" id="solicitacoes"></div></section>
+
+    <!-- RF10 -->
+    <section id="pAgenda" class="painel">
+        <div class="entre" style="margin-bottom:12px">
+            <button class="btn btn-leve btn-sm" onclick="mudarSemana(-7)">‹ Semana anterior</button>
+            <strong id="tituloSemana"></strong>
+            <button class="btn btn-leve btn-sm" onclick="mudarSemana(7)">Próxima semana ›</button>
+        </div>
+        <div class="calendario" id="calendario"></div>
+        <p class="pequeno suave">Exibe as aulas com status CONFIRMADO.</p>
+    </section>
+
+    <!-- RF09 -->
+    <section id="pAulas" class="painel"><div class="card tabela-wrap" id="aulas"></div></section>
+
+    <!-- RF04 -->
+    <section id="pOfertas" class="painel">
+        <div class="grid grid-2">
+            <form class="card" id="formOferta">
+                <h3 id="tituloOferta">Novo serviço</h3>
+                <input type="hidden" id="oId">
+                <div class="campo"><label>Disciplina</label><select id="oDisc" required></select></div>
+                <div class="campo"><label>Modalidade</label>
+                    <select id="oMod"><option value="ONLINE">Online</option><option value="PRESENCIAL">Presencial</option></select></div>
+                <div class="linha">
+                    <div class="campo"><label>Valor/hora (R$)</label><input id="oValor" type="number" min="1" step="0.01" required></div>
+                    <div class="campo"><label>Comissão da plataforma (%)</label><input id="oCom" type="number" min="0" max="100" step="0.01" value="10"></div>
+                </div>
+                <div class="entre"><button type="button" class="btn btn-leve" onclick="limparOferta()">Limpar</button>
+                    <button class="btn">Salvar serviço</button></div>
+            </form>
+            <div class="card tabela-wrap" id="ofertas"></div>
+        </div>
+    </section>
+
+    <!-- RF15 -->
+    <section id="pFin" class="painel">
+        <div class="linha" style="margin-bottom:16px;max-width:360px">
+            <div><label>Mês de referência</label><input type="month" id="finMes"></div>
+        </div>
+        <div class="grid grid-4" id="kpis"></div>
+        <div class="grid grid-2 mt">
+            <div class="card"><h3>Receita bruta — últimos 6 meses</h3><div class="barras" id="grafico"></div></div>
+            <div class="card tabela-wrap"><h3>Parcelas em aberto</h3><div id="abertas"></div></div>
+        </div>
+        <div class="card tabela-wrap mt"><h3>Repasses</h3><div id="repasses"></div></div>
+    </section>
+
+    <!-- RF17 -->
+    <section id="pHist" class="painel">
+        <form class="card linha" id="formHist">
+            <div><label>Data inicial</label><input type="date" id="hIni"></div>
+            <div><label>Data final</label><input type="date" id="hFim"></div>
+            <div style="flex:0 0 auto"><button class="btn">Filtrar</button></div>
+        </form>
+        <div class="grid grid-4 mt" id="hTotais"></div>
+        <div class="card tabela-wrap mt" id="hAulas"></div>
+    </section>
+
+    <section id="pPerfil" class="painel">
+        <form class="card estreito" id="formPerfil">
+            <div class="campo"><label>Nome</label><input id="pNome" required></div>
+            <div class="campo"><label>Telefone</label><input id="pTel"></div>
+            <div class="campo"><label>Bio (perfil público)</label><textarea id="pBio" rows="5" maxlength="1000"></textarea></div>
+            <button class="btn">Salvar</button>
+        </form>
+    </section>
+</main>
+
+<script>
+    const eu = Api.exigir('PROFESSOR');
+    if (eu) document.getElementById('linkPerfil').href = 'professor.html?id=' + eu.id;
+
+    const linhaAula = (a, acoes) => `<tr>
+        <td>${fmt.data(a.dataAula)}</td><td>${fmt.hora(a.horarioInicio)}–${fmt.hora(a.horarioFim)}</td>
+        <td>${esc(a.alunoNome)}</td><td>${esc(a.disciplina)} ${selo(a.modalidade)}</td>
+        <td class="num">${fmt.moeda(a.valorEstimado)}</td><td>${selo(a.status)}</td><td>${acoes || ''}</td></tr>`;
+    const cabAula = '<tr><th>Data</th><th>Horário</th><th>Aluno</th><th>Disciplina</th><th class="num">Valor</th><th>Status</th><th></th></tr>';
+
+    async function mudarStatus(id, operacao, msg) {
+        await acao(() => Api.patch(`/api/agendamentos/${id}/${operacao}`), msg);
+        carregarSolicitacoes(); carregarAulas(); carregarAgenda();
+    }
+
+    async function carregarSolicitacoes() {
+        const todas = await Api.get('/api/agendamentos/professor');
+        const pend = todas.filter(a => a.status === 'SOLICITADO');
+        document.getElementById('qtdSolic').textContent = pend.length;
+        document.getElementById('solicitacoes').innerHTML = pend.length ? `<table>${cabAula}${pend.map(a => linhaAula(a,
+            `<button class="btn btn-verde btn-sm" onclick="mudarStatus(${a.id},'confirmar','Aula confirmada.')">Confirmar</button>
+             <button class="btn btn-perigo btn-sm" onclick="mudarStatus(${a.id},'recusar','Solicitação recusada.')">Recusar</button>`)).join('')}</table>`
+            : '<div class="vazio">Nenhuma solicitação pendente.</div>';
+    }
+
+    async function carregarAulas() {
+        const todas = await Api.get('/api/agendamentos/professor');
+        document.getElementById('aulas').innerHTML = todas.length ? `<table>${cabAula}${todas.map(a => linhaAula(a,
+            a.status === 'CONFIRMADO' ? `<button class="btn btn-sm" onclick="concluir(${a.id})">Concluir aula</button>` : '')).join('')}</table>`
+            : '<div class="vazio">Nenhuma aula.</div>';
+    }
+
+    async function concluir(id) {
+        if (!confirm('Marcar a aula como CONCLUÍDA? O pagamento será gerado para o aluno.')) return;
+        mudarStatus(id, 'concluir', 'Aula concluída e pagamento gerado.');
+    }
+
+    // ---- agenda semanal ----
+    let refSemana = new Date();
+    function mudarSemana(dias) { refSemana.setDate(refSemana.getDate() + dias); carregarAgenda(); }
+    async function carregarAgenda() {
+        const aulas = await Api.get('/api/agendamentos/professor/semana?data=' + fmt.iso(refSemana));
+        const seg = new Date(refSemana); seg.setDate(seg.getDate() - ((seg.getDay() + 6) % 7));
+        const dom = new Date(seg); dom.setDate(dom.getDate() + 6);
+        document.getElementById('tituloSemana').textContent = `${seg.toLocaleDateString('pt-BR')} a ${dom.toLocaleDateString('pt-BR')}`;
+        const hoje = fmt.iso(new Date());
+        let html = '';
+        for (let i = 0; i < 7; i++) {
+            const d = new Date(seg); d.setDate(seg.getDate() + i);
+            const iso = fmt.iso(d);
+            const doDia = aulas.filter(a => a.dataAula === iso);
+            html += `<div class="dia ${iso === hoje ? 'hoje' : ''}">
+                <div class="dia-titulo">${d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' })}</div>
+                ${doDia.map(a => `<div class="evento"><b>${fmt.hora(a.horarioInicio)}–${fmt.hora(a.horarioFim)}</b>
+                    ${esc(a.disciplina)}<br><span class="suave">${esc(a.alunoNome)} · ${fmt.rotulo(a.modalidade)}</span></div>`).join('')}
+            </div>`;
+        }
+        document.getElementById('calendario').innerHTML = html;
+    }
+
+    // ---- ofertas ----
+    let minhasOfertas = [];
+    async function carregarOfertas() {
+        const disc = await Api.get('/api/disciplinas');
+        const sel = document.getElementById('oDisc');
+        if (!sel.options.length) sel.innerHTML = disc.map(d => `<option value="${d.id}">${esc(d.nome)}</option>`).join('');
+        minhasOfertas = await Api.get('/api/ofertas/minhas');
+        document.getElementById('ofertas').innerHTML = `<h3>Serviços cadastrados</h3>` + (minhasOfertas.length ? `<table>
+            <tr><th>Disciplina</th><th>Modalidade</th><th class="num">Valor/h</th><th class="num">Comissão</th><th></th></tr>
+            ${minhasOfertas.map(o => `<tr><td>${esc(o.disciplina)}</td><td>${selo(o.modalidade)}</td>
+                <td class="num">${fmt.moeda(o.valorHora)}</td><td class="num">${fmt.pct(o.percentualComissao)}</td>
+                <td><button class="btn btn-leve btn-sm" onclick="editarOferta(${o.id})">Editar</button>
+                    <button class="btn btn-leve btn-sm" onclick="excluirOferta(${o.id})">Excluir</button></td></tr>`).join('')}</table>`
+            : '<div class="vazio">Cadastre seu primeiro serviço.</div>');
+    }
+    function editarOferta(id) {
+        const o = minhasOfertas.find(x => x.id === id);
+        oId.value = o.id; oDisc.value = o.disciplinaId; oMod.value = o.modalidade; oValor.value = o.valorHora; oCom.value = o.percentualComissao;
+        document.getElementById('tituloOferta').textContent = 'Editar serviço';
+    }
+    function limparOferta() {
+        document.getElementById('formOferta').reset(); oId.value = '';
+        document.getElementById('tituloOferta').textContent = 'Novo serviço';
+    }
+    async function excluirOferta(id) {
+        if (!confirm('Excluir este serviço?')) return;
+        await acao(() => Api.del('/api/ofertas/' + id), 'Serviço excluído.');
+        carregarOfertas();
+    }
+    document.getElementById('formOferta').addEventListener('submit', async ev => {
+        ev.preventDefault();
+        const corpo = { disciplinaId: +oDisc.value, modalidade: oMod.value, valorHora: +oValor.value, percentualComissao: oCom.value === '' ? null : +oCom.value };
+        await acao(() => oId.value ? Api.put('/api/ofertas/' + oId.value, corpo) : Api.post('/api/ofertas', corpo), 'Serviço salvo.');
+        limparOferta(); carregarOfertas();
+    });
+
+    // ---- financeiro ----
+    const finMes = document.getElementById('finMes');
+    finMes.value = fmt.iso(new Date()).substring(0, 7);
+    finMes.addEventListener('change', carregarFinanceiro);
+    async function carregarFinanceiro() {
+        const [ano, mes] = finMes.value.split('-');
+        const f = await Api.get(`/api/financeiro/painel?ano=${ano}&mes=${+mes}`);
+        document.getElementById('kpis').innerHTML = `
+            <div class="card kpi"><div class="rotulo">Receita bruta do mês</div><div class="valor">${fmt.moeda(f.receitaMes)}</div><div class="pequeno suave">${f.aulasConcluidasMes} aula(s) concluída(s)</div></div>
+            <div class="card kpi verde"><div class="rotulo">Líquido do mês</div><div class="valor">${fmt.moeda(f.receitaLiquidaMes)}</div><div class="pequeno suave">após comissão</div></div>
+            <div class="card kpi verde"><div class="rotulo">Repasses realizados</div><div class="valor">${fmt.moeda(f.repassesRealizados)}</div></div>
+            <div class="card kpi laranja"><div class="rotulo">Repasses pendentes</div><div class="valor">${fmt.moeda(f.repassesPendentes)}</div><div class="pequeno suave">${fmt.moeda(f.totalEmAberto)} em parcelas abertas</div></div>`;
+        const max = Math.max(1, ...f.ultimosMeses.map(m => +m.valor));
+        document.getElementById('grafico').innerHTML = f.ultimosMeses.map(m => `
+            <div class="barra-col"><span class="v">${fmt.moeda(m.valor).replace(',00', '')}</span>
+                <div class="barra" style="height:${(m.valor / max) * 150}px"></div><span class="m">${m.mes}</span></div>`).join('');
+        document.getElementById('abertas').innerHTML = f.parcelasEmAberto.length ? `<table>
+            <tr><th>Aluno</th><th>Parcela</th><th>Vencimento</th><th class="num">Valor</th><th>Status</th></tr>
+            ${f.parcelasEmAberto.map(p => `<tr><td>${esc(p.alunoNome)}<br><span class="pequeno suave">${esc(p.disciplina)}</span></td>
+                <td>${p.numeroParcela}/${p.qtdParcelas}</td><td>${fmt.data(p.dataVencimento)}</td>
+                <td class="num">${fmt.moeda(p.valorAPagar)}</td><td>${selo(p.status)}</td></tr>`).join('')}</table>`
+            : '<div class="vazio">Nenhuma parcela em aberto.</div>';
+        document.getElementById('repasses').innerHTML = f.repasses.length ? `<table>
+            <tr><th>Aula</th><th>Aluno</th><th class="num">Bruto</th><th class="num">Comissão</th><th class="num">Líquido</th><th>Status</th></tr>
+            ${f.repasses.map(r => `<tr><td>${fmt.data(r.dataAula)} · ${esc(r.disciplina)}</td><td>${esc(r.alunoNome)}</td>
+                <td class="num">${fmt.moeda(r.valorBruto)}</td><td class="num">${fmt.moeda(r.valorComissao)}</td>
+                <td class="num"><strong>${fmt.moeda(r.valorLiquido)}</strong></td><td>${selo(r.status)}</td></tr>`).join('')}</table>`
+            : '<div class="vazio">Nenhum repasse ainda.</div>';
+    }
+
+    // ---- histórico ----
+    const agora = new Date();
+    hIni.value = fmt.iso(new Date(agora.getFullYear(), agora.getMonth() - 3, 1));
+    hFim.value = fmt.iso(new Date(agora.getFullYear(), agora.getMonth() + 1, 0));
+    async function carregarHistorico(ev) {
+        if (ev) ev.preventDefault();
+        const h = await acao(() => Api.get(`/api/agendamentos/professor/historico?inicio=${hIni.value}&fim=${hFim.value}`));
+        document.getElementById('hTotais').innerHTML = `
+            <div class="card kpi"><div class="rotulo">Total de aulas</div><div class="valor">${h.totalAulas}</div></div>
+            <div class="card kpi verde"><div class="rotulo">Concluídas</div><div class="valor">${h.concluidas}</div><div class="pequeno suave">${String(h.horasMinistradas).replace('.', ',')} h ministradas</div></div>
+            <div class="card kpi"><div class="rotulo">Confirmadas / Solicitadas</div><div class="valor">${h.confirmadas} / ${h.solicitadas}</div></div>
+            <div class="card kpi verde"><div class="rotulo">Receita (concluídas)</div><div class="valor">${fmt.moeda(h.receitaConcluidas)}</div><div class="pequeno suave">${h.canceladas} cancelada(s)</div></div>`;
+        document.getElementById('hAulas').innerHTML = h.aulas.length ? `<table>${cabAula}${h.aulas.map(a => linhaAula(a)).join('')}</table>`
+            : '<div class="vazio">Nenhuma aula no período.</div>';
+    }
+    document.getElementById('formHist').addEventListener('submit', carregarHistorico);
+
+    // ---- perfil ----
+    async function carregarPerfil() {
+        const u = await Api.get('/api/usuarios/me');
+        pNome.value = u.nome; pTel.value = u.telefone || ''; pBio.value = u.bio || '';
+    }
+    document.getElementById('formPerfil').addEventListener('submit', async ev => {
+        ev.preventDefault();
+        await acao(() => Api.put('/api/usuarios/me', { nome: pNome.value, telefone: pTel.value, bio: pBio.value }), 'Perfil atualizado.');
+    });
+
+    if (eu) {
+        ativarAbas(alvo => ({
+            pSolic: carregarSolicitacoes, pAgenda: carregarAgenda, pAulas: carregarAulas, pOfertas: carregarOfertas,
+            pFin: carregarFinanceiro, pHist: carregarHistorico, pPerfil: carregarPerfil
+        })[alvo]());
+        carregarSolicitacoes();
+    }
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="AulanetApplication (MySQL)" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
+    <option name="ACTIVE_PROFILES" value="mysql" />
+    <option name="MAIN_CLASS_NAME" value="br.uema.aulanet.AulanetApplication" />
+    <module name="aulanet" />
+    <envs>
+      <env name="DB_USER" value="root" />
+      <env name="DB_PASSWORD" value="root" />
+    </envs>
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>
