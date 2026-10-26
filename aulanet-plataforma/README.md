@@ -45,7 +45,7 @@ Sem IntelliJ: `./mvnw spring-boot:run` (Linux/Mac) ou `mvnw.cmd spring-boot:run`
 ### Testes
 
 Clique com o botão direito em `src/test/java` → **Run 'All Tests'**, ou `./mvnw test`.
-São 24 testes: unitários dos serviços (cálculo financeiro, agendamento, multas, repasses) e
+São 26 testes: unitários dos serviços (cálculo financeiro, agendamento, multas, repasses) e
 de integração da API (autenticação, 401/403 por papel, fluxo completo solicitar → confirmar →
 concluir → parcelar → pagar → avaliar).
 
@@ -120,7 +120,7 @@ público do professor (RF05).
 - **Valor da aula** = valor/hora × duração.
 - **Parcelamento** (2 a 12x): Tabela Price, `PMT = PV·i / (1 − (1+i)^−n)`, com `i = 1,99% a.m.`.
   À vista não tem juros. A última parcela absorve a diferença de arredondamento.
-  O parcelamento pode ser alterado enquanto nenhuma parcela tiver sido paga.
+  O parcelamento pode ser alterado enquanto nenhuma parcela tiver sido paga nem estiver em atraso.
 - **Atraso**: multa de 2% + mora de 0,033% ao dia sobre o valor da parcela, recalculadas diariamente.
 - **Repasse**: comissão = valor da aula × % de comissão da oferta; líquido = bruto − comissão.
   Juros e multas não entram no repasse.

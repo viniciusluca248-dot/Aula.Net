@@ -100,6 +100,9 @@ public class AgendamentoService {
     public AgendamentoDTO concluir(Integer professorId, Integer agendamentoId) {
         Agendamento a = obterDoProfessor(professorId, agendamentoId);
         exigirStatus(a, StatusAgendamento.CONFIRMADO);
+        if (LocalDateTime.of(a.getDataAula(), a.getHorarioInicio()).isAfter(LocalDateTime.now(clock))) {
+            throw new RegraNegocioException("A aula só pode ser concluída depois do horário de início.");
+        }
         a.setStatus(StatusAgendamento.CONCLUIDO);
         financeiroService.gerarPagamento(a);
         return AgendamentoDTO.de(a, false);

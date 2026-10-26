@@ -75,12 +75,12 @@ public class FinanceiroService {
         return calculadora.simular(valor, qtdParcelas);
     }
 
-    /** RF12: aluno escolhe à vista (1) ou parcelado (2..N) enquanto nenhuma parcela foi paga. */
+    /** RF12: aluno escolhe à vista (1) ou parcelado (2..N) enquanto nenhuma parcela foi paga nem está em atraso. */
     @Transactional
     public PagamentoDTO parcelar(Integer alunoId, Integer pagamentoId, int qtdParcelas) {
         Pagamento p = obterDoAluno(alunoId, pagamentoId);
         if (!podeParcelar(p)) {
-            throw new RegraNegocioException("Não é possível alterar o parcelamento após pagar uma parcela.");
+            throw new RegraNegocioException("Não é possível alterar o parcelamento após pagar uma parcela ou com parcela em atraso.");
         }
         aplicarParcelamento(p, qtdParcelas);
         pagamentoRepository.flush(); // atribui os ids das novas parcelas antes de devolvê-las
@@ -176,7 +176,8 @@ public class FinanceiroService {
     }
 
     private boolean podeParcelar(Pagamento p) {
-        return p.getParcelas().stream().noneMatch(x -> x.getStatus() == StatusParcela.PAGO);
+        // parcela em atraso também bloqueia: refazer o parcelamento apagaria a multa e adiaria o vencimento
+        return p.getParcelas().stream().allMatch(x -> x.getStatus() == StatusParcela.PENDENTE);
     }
 
     private Pagamento obterDoAluno(Integer alunoId, Integer pagamentoId) {

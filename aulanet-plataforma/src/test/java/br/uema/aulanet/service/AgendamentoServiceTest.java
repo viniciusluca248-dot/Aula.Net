@@ -114,8 +114,19 @@ class AgendamentoServiceTest {
     }
 
     @Test
+    void naoConcluiAulaQueAindaNaoComecou() {
+        Agendamento futura = agendamento(10, StatusAgendamento.CONFIRMADO, LocalTime.NOON, 60);
+        when(agendamentoRepository.findById(10)).thenReturn(Optional.of(futura));
+
+        assertThatThrownBy(() -> service.concluir(1, 10)).isInstanceOf(RegraNegocioException.class);
+        assertThat(futura.getStatus()).isEqualTo(StatusAgendamento.CONFIRMADO);
+        verifyNoInteractions(financeiroService);
+    }
+
+    @Test
     void concluirExigeConfirmadoEGeraPagamento() {
         Agendamento solicitado = agendamento(10, StatusAgendamento.SOLICITADO, LocalTime.NOON, 60);
+        solicitado.setDataAula(HOJE.minusDays(1));
         when(agendamentoRepository.findById(10)).thenReturn(Optional.of(solicitado));
         assertThatThrownBy(() -> service.concluir(1, 10)).isInstanceOf(RegraNegocioException.class);
         verifyNoInteractions(financeiroService);

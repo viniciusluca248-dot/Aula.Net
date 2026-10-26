@@ -67,10 +67,10 @@
 <script>
     const eu = Api.exigir('ALUNO');
     document.getElementById('nome').textContent = eu ? eu.nome.split(' ')[0] : '';
-    let pagamentos = [];
+    let pagamentos = [], aulas = [];
 
     async function carregarAulas() {
-        const aulas = await Api.get('/api/agendamentos/meus');
+        aulas = await Api.get('/api/agendamentos/meus');
         document.getElementById('aulas').innerHTML = aulas.length ? `<table>
             <tr><th>Data</th><th>Horário</th><th>Professor</th><th>Disciplina</th><th class="num">Valor</th><th>Status</th><th></th></tr>
             ${aulas.map(a => `<tr>
@@ -79,7 +79,7 @@
                 <td>${esc(a.disciplina)} ${selo(a.modalidade)}</td>
                 <td class="num">${fmt.moeda(a.valorEstimado)}</td><td>${selo(a.status)}</td>
                 <td>${['SOLICITADO', 'CONFIRMADO'].includes(a.status) ? `<button class="btn btn-leve btn-sm" onclick="cancelar(${a.id})">Cancelar</button>` : ''}
-                    ${a.status === 'CONCLUIDO' && !a.avaliado ? `<button class="btn btn-sm" onclick="abrirAvaliacao(${a.id}, '${esc(a.professorNome)}')">Avaliar</button>` : ''}
+                    ${a.status === 'CONCLUIDO' && !a.avaliado ? `<button class="btn btn-sm" onclick="abrirAvaliacao(${a.id})">Avaliar</button>` : ''}
                     ${a.status === 'CONCLUIDO' && a.avaliado ? '<span class="pequeno suave">avaliada ✓</span>' : ''}</td>
             </tr>`).join('')}</table>` : '<div class="vazio">Você ainda não agendou aulas. <a href="index.html">Encontre um professor</a>.</div>';
     }
@@ -152,9 +152,10 @@
         document.getElementById('maEstrelas').innerHTML = [1, 2, 3, 4, 5].map(i => `<span data-n="${i}" class="${i <= nota ? 'on' : ''}">★</span>`).join('');
     }
     document.getElementById('maEstrelas').addEventListener('click', e => { if (e.target.dataset.n) { nota = +e.target.dataset.n; desenharEstrelas(); } });
-    function abrirAvaliacao(id, professor) {
+    function abrirAvaliacao(id) {
         avaliando = id; nota = 5; desenharEstrelas();
-        document.getElementById('maInfo').textContent = 'Como foi sua aula com ' + professor + '?';
+        const aula = aulas.find(a => a.id === id);
+        document.getElementById('maInfo').textContent = 'Como foi sua aula com ' + aula.professorNome + '?';
         document.getElementById('maComentario').value = '';
         abrirModal('mAvaliar');
     }

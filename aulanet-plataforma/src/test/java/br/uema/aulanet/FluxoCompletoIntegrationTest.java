@@ -2,6 +2,7 @@ package br.uema.aulanet;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import br.uema.aulanet.repository.AgendamentoRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -24,6 +25,7 @@ class FluxoCompletoIntegrationTest {
 
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
+    @Autowired AgendamentoRepository agendamentoRepository;
 
     private String login(String email, String senha) throws Exception {
         String body = mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
@@ -94,6 +96,12 @@ class FluxoCompletoIntegrationTest {
 
         // 2. professor confirma e 3. conclui (gera pagamento)
         mvc.perform(auth(patch("/api/agendamentos/" + agId + "/confirmar"), prof)).andExpect(jsonPath("$.status").value("CONFIRMADO"));
+        // aula ainda não aconteceu: não pode ser concluída
+        mvc.perform(auth(patch("/api/agendamentos/" + agId + "/concluir"), prof)).andExpect(status().isBadRequest());
+        // simula a passagem do tempo: a aula passa a ter sido ontem
+        var aula = agendamentoRepository.findById(agId).orElseThrow();
+        aula.setDataAula(LocalDate.now().minusDays(1));
+        agendamentoRepository.save(aula);
         mvc.perform(auth(patch("/api/agendamentos/" + agId + "/concluir"), prof)).andExpect(jsonPath("$.status").value("CONCLUIDO"));
         mvc.perform(auth(patch("/api/agendamentos/" + agId + "/concluir"), prof)).andExpect(status().isBadRequest());
 

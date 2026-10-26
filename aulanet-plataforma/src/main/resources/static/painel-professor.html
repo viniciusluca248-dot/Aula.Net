@@ -123,9 +123,12 @@
     async function carregarAulas() {
         const todas = await Api.get('/api/agendamentos/professor');
         document.getElementById('aulas').innerHTML = todas.length ? `<table>${cabAula}${todas.map(a => linhaAula(a,
-            a.status === 'CONFIRMADO' ? `<button class="btn btn-sm" onclick="concluir(${a.id})">Concluir aula</button>` : '')).join('')}</table>`
+            a.status === 'CONFIRMADO' && jaComecou(a) ? `<button class="btn btn-sm" onclick="concluir(${a.id})">Concluir aula</button>` : '')).join('')}</table>`
             : '<div class="vazio">Nenhuma aula.</div>';
     }
+
+    // a aula só pode ser concluída depois do horário de início (regra também validada no servidor)
+    const jaComecou = a => new Date(`${a.dataAula}T${a.horarioInicio}`) <= new Date();
 
     async function concluir(id) {
         if (!confirm('Marcar a aula como CONCLUÍDA? O pagamento será gerado para o aluno.')) return;

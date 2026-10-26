@@ -105,6 +105,18 @@ class FinanceiroServiceTest {
     }
 
     @Test
+    void naoRefazParcelamentoComParcelaAtrasada() {
+        Pagamento p = service.gerarPagamento(aula(60, "100.00", "10"));
+        p.getParcelas().get(0).setStatus(StatusParcela.ATRASADO);
+        p.getParcelas().get(0).setValorMulta(new BigDecimal("2.33"));
+        when(pagamentoRepository.findDetalhado(5)).thenReturn(Optional.of(p));
+
+        assertThatThrownBy(() -> service.parcelar(2, 5, 3)).isInstanceOf(RegraNegocioException.class);
+        assertThat(p.getParcelas()).singleElement().satisfies(x ->
+                assertThat(x.getValorMulta()).isEqualByComparingTo("2.33"));
+    }
+
+    @Test
     void outroAlunoNaoPodeParcelar() {
         Pagamento p = service.gerarPagamento(aula(60, "100.00", "10"));
         when(pagamentoRepository.findDetalhado(5)).thenReturn(Optional.of(p));
