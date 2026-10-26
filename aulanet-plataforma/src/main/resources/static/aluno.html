@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Painel do aluno — Aula.net</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎓</text></svg>">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="js/api.js"></script>
+</head>
+<body>
+<nav class="nav" id="nav"></nav>
+<main class="container">
+    <div class="entre"><h1 style="margin:0">Olá, <span id="nome"></span></h1>
+        <a class="btn" href="index.html">+ Nova aula</a></div>
+
+    <div class="abas mt">
+        <button class="aba ativa" data-alvo="pAulas">Minhas aulas</button>
+        <button class="aba" data-alvo="pPagamentos">Pagamentos</button>
+        <button class="aba" data-alvo="pPerfil">Meu perfil</button>
+    </div>
+
+    <section id="pAulas" class="painel ativo"><div class="card tabela-wrap" id="aulas"></div></section>
+    <section id="pPagamentos" class="painel"><div id="pagamentos"></div></section>
+    <section id="pPerfil" class="painel">
+        <form class="card estreito" id="formPerfil">
+            <div class="campo"><label>Nome</label><input id="pNome" required></div>
+            <div class="campo"><label>Telefone</label><input id="pTel"></div>
+            <div class="campo"><label>Sobre mim</label><textarea id="pBio" rows="3"></textarea></div>
+            <button class="btn">Salvar</button>
+        </form>
+    </section>
+</main>
+
+<!-- Modal de pagamento: seletor de parcelas com valor em tempo real -->
+<div class="modal-fundo" id="mPagamento">
+    <div class="modal">
+        <h3>Forma de pagamento</h3>
+        <p class="suave" id="mpInfo"></p>
+        <div class="campo"><label for="mpParcelas">Número de parcelas</label><select id="mpParcelas"></select></div>
+        <div class="card" style="background:var(--fundo)">
+            <div class="entre"><span>Valor de cada parcela</span><strong id="mpValorParcela" style="font-size:1.3rem">-</strong></div>
+            <div class="entre pequeno suave"><span>Total com juros</span><span id="mpTotal">-</span></div>
+            <div class="entre pequeno suave"><span>Juros (Tabela Price, <span id="mpTaxa"></span> a.m.)</span><span id="mpJuros">-</span></div>
+        </div>
+        <div class="entre mt">
+            <button class="btn btn-leve" onclick="fecharModal('mPagamento')">Cancelar</button>
+            <button class="btn" id="mpConfirmar">Confirmar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de avaliação -->
+<div class="modal-fundo" id="mAvaliar">
+    <div class="modal">
+        <h3>Avaliar aula</h3>
+        <p class="suave" id="maInfo"></p>
+        <div class="estrelas-input" id="maEstrelas"></div>
+        <div class="campo mt"><label for="maComentario">Comentário</label><textarea id="maComentario" rows="3" maxlength="2000"></textarea></div>
+        <div class="entre">
+            <button class="btn btn-leve" onclick="fecharModal('mAvaliar')">Cancelar</button>
+            <button class="btn" id="maEnviar">Enviar avaliação</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const eu = Api.exigir('ALUNO');
+    document.getElementById('nome').textContent = eu ? eu.nome.split(' ')[0] : '';
+    let pagamentos = [], aulas = [];
+
+    async function carregarAulas() {
+        aulas = await Api.get('/api/agendamentos/meus');
+        document.getElementById('aulas').innerHTML = aulas.length ? `<table>
+            <tr><th>Data</th><th>Horário</th><th>Professor</th><th>Disciplina</th><th class="num">Valor</th><th>Status</th><th></th></tr>
+            ${aulas.map(a => `<tr>
+                <td>${fmt.data(a.dataAula)}</td><td>${fmt.hora(a.horarioInicio)}–${fmt.hora(a.horarioFim)}</td>
+                <td><a href="professor.html?id=${a.professorId}">${esc(a.professorNome)}</a></td>
+                <td>${esc(a.disciplina)} ${selo(a.modalidade)}</td>
+                <td class="num">${fmt.moeda(a.valorEstimado)}</td><td>${selo(a.status)}</td>
+                <td>${['SOLICITADO', 'CONFIRMADO'].includes(a.status) ? `<button class="btn btn-leve btn-sm" onclick="cancelar(${a.id})">Cancelar</button>` : ''}
+                    ${a.status === 'CONCLUIDO' && !a.avaliado ? `<button class="btn btn-sm" onclick="abrirAvaliacao(${a.id})">Avaliar</button>` : ''}
+                    ${a.status === 'CONCLUIDO' && a.avaliado ? '<span class="pequeno suave">avaliada ✓</span>' : ''}</td>
+            </tr>`).join('')}</table>` : '<div class="vazio">Você ainda não agendou aulas. <a href="index.html">Encontre um professor</a>.</div>';
+    }
+
+    async function cancelar(id) {
+        if (!confirm('Cancelar esta aula?')) return;
+        await acao(() => Api.patch(`/api/agendamentos/${id}/cancelar`), 'Aula cancelada.');
+        carregarAulas();
+    }
+
+    async function carregarPagamentos() {
+        pagamentos = await Api.get('/api/pagamentos/meus');
+        document.getElementById('pagamentos').innerHTML = pagamentos.length ? pagamentos.map(p => `
+            <div class="card" style="margin-bottom:16px">
+                <div class="entre">
+                    <div><h3>${esc(p.disciplina)} — ${esc(p.professorNome)}</h3>
+                        <span class="suave pequeno">Aula de ${fmt.data(p.dataAula)} · ${fmt.rotulo(p.tipo)} (${p.qtdParcelas}x)</span></div>
+                    <div class="centro"><div class="preco">${fmt.moeda(p.valorTotal)}</div>
+                        ${p.quitado ? selo('PAGO') : ''}
+                        ${p.podeParcelar ? `<button class="btn btn-sec btn-sm mt" onclick="abrirParcelamento(${p.id})">Alterar forma de pagamento</button>` : ''}</div>
+                </div>
+                <div class="tabela-wrap mt"><table>
+                    <tr><th>Parcela</th><th>Vencimento</th><th class="num">Valor</th><th class="num">Juros</th><th class="num">Multa/mora</th><th class="num">A pagar</th><th>Status</th><th></th></tr>
+                    ${p.parcelas.map(x => `<tr>
+                        <td>${x.numeroParcela}/${p.qtdParcelas}</td><td>${fmt.data(x.dataVencimento)}</td>
+                        <td class="num">${fmt.moeda(x.valor)}</td><td class="num">${fmt.moeda(x.valorJuros)}</td>
+                        <td class="num">${fmt.moeda(x.valorMulta)}</td><td class="num"><strong>${fmt.moeda(x.valorAPagar)}</strong></td>
+                        <td>${selo(x.status)}</td>
+                        <td>${x.status !== 'PAGO' ? `<button class="btn btn-verde btn-sm" onclick="pagar(${x.id}, '${fmt.moeda(x.valorAPagar)}')">Pagar</button>` : ''}</td>
+                    </tr>`).join('')}
+                </table></div>
+            </div>`).join('') : '<div class="card vazio">Nenhum pagamento. Os pagamentos são gerados quando uma aula é concluída.</div>';
+    }
+
+    async function pagar(parcelaId, valor) {
+        if (!confirm(`Registrar pagamento de ${valor}?`)) return;
+        await acao(() => Api.post(`/api/parcelas/${parcelaId}/pagar`), 'Pagamento registrado!');
+        carregarPagamentos();
+    }
+
+    // ---- parcelamento com simulação em tempo real ----
+    let pagamentoAtual = null;
+    async function simular() {
+        const n = document.getElementById('mpParcelas').value;
+        const s = await Api.get(`/api/pagamentos/simulacao?valor=${pagamentoAtual.valorTotal}&parcelas=${n}`);
+        document.getElementById('mpValorParcela').textContent = `${n}x ${fmt.moeda(s.valorParcela)}`;
+        document.getElementById('mpTotal').textContent = fmt.moeda(s.totalComJuros);
+        document.getElementById('mpJuros').textContent = fmt.moeda(s.totalJuros);
+        document.getElementById('mpTaxa').textContent = fmt.pct(s.taxaJurosMensal * 100);
+    }
+    function abrirParcelamento(id) {
+        pagamentoAtual = pagamentos.find(p => p.id === id);
+        document.getElementById('mpInfo').textContent = `${pagamentoAtual.disciplina} com ${pagamentoAtual.professorNome} — ${fmt.moeda(pagamentoAtual.valorTotal)}`;
+        const sel = document.getElementById('mpParcelas');
+        sel.innerHTML = Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}">${i === 0 ? 'À vista (1x sem juros)' : (i + 1) + 'x'}</option>`).join('');
+        sel.value = pagamentoAtual.qtdParcelas;
+        simular();
+        abrirModal('mPagamento');
+    }
+    document.getElementById('mpParcelas').addEventListener('change', simular);
+    document.getElementById('mpConfirmar').addEventListener('click', async () => {
+        await acao(() => Api.post(`/api/pagamentos/${pagamentoAtual.id}/parcelamento`, { qtdParcelas: +document.getElementById('mpParcelas').value }), 'Forma de pagamento atualizada.');
+        fecharModal('mPagamento');
+        carregarPagamentos();
+    });
+
+    // ---- avaliação ----
+    let avaliando = null, nota = 5;
+    function desenharEstrelas() {
+        document.getElementById('maEstrelas').innerHTML = [1, 2, 3, 4, 5].map(i => `<span data-n="${i}" class="${i <= nota ? 'on' : ''}">★</span>`).join('');
+    }
+    document.getElementById('maEstrelas').addEventListener('click', e => { if (e.target.dataset.n) { nota = +e.target.dataset.n; desenharEstrelas(); } });
+    function abrirAvaliacao(id) {
+        avaliando = id; nota = 5; desenharEstrelas();
+        const aula = aulas.find(a => a.id === id);
+        document.getElementById('maInfo').textContent = 'Como foi sua aula com ' + aula.professorNome + '?';
+        document.getElementById('maComentario').value = '';
+        abrirModal('mAvaliar');
+    }
+    document.getElementById('maEnviar').addEventListener('click', async () => {
+        await acao(() => Api.post('/api/avaliacoes', { agendamentoId: avaliando, nota, comentario: document.getElementById('maComentario').value }), 'Obrigado pela avaliação!');
+        fecharModal('mAvaliar');
+        carregarAulas();
+    });
+
+    // ---- perfil ----
+    async function carregarPerfil() {
+        const u = await Api.get('/api/usuarios/me');
+        document.getElementById('pNome').value = u.nome;
+        document.getElementById('pTel').value = u.telefone || '';
+        document.getElementById('pBio').value = u.bio || '';
+    }
+    document.getElementById('formPerfil').addEventListener('submit', async ev => {
+        ev.preventDefault();
+        await acao(() => Api.put('/api/usuarios/me', { nome: pNome.value, telefone: pTel.value, bio: pBio.value }), 'Perfil atualizado.');
+    });
+
+    if (eu) {
+        ativarAbas(alvo => ({ pAulas: carregarAulas, pPagamentos: carregarPagamentos, pPerfil: carregarPerfil })[alvo]());
+        carregarAulas();
+    }
+</script>
+</body>
+</html>

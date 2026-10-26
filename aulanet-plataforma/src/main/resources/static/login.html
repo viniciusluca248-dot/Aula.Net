@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Entrar — Aula.net</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎓</text></svg>">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="js/api.js"></script>
+</head>
+<body>
+<nav class="nav" id="nav"></nav>
+<main class="container estreito">
+    <div class="card mt-2">
+        <h2 style="margin-top:0">Entrar</h2>
+        <div id="aviso"></div>
+        <form id="form">
+            <div class="campo"><label for="email">E-mail</label><input id="email" type="email" required autocomplete="username"></div>
+            <div class="campo"><label for="senha">Senha</label><input id="senha" type="password" required autocomplete="current-password"></div>
+            <button class="btn btn-bloco" type="submit">Entrar</button>
+        </form>
+        <p class="centro pequeno mt">Ainda não tem conta? <a href="cadastro.html">Cadastre-se</a></p>
+    </div>
+    <div class="card mt pequeno">
+        <strong>Contas de demonstração</strong>
+        <table class="mt">
+            <tr><td>Aluno</td><td>joao@aulanet.com</td><td>123456</td><td><button class="btn btn-leve btn-sm" data-demo="joao@aulanet.com|123456">usar</button></td></tr>
+            <tr><td>Professor</td><td>ana@aulanet.com</td><td>123456</td><td><button class="btn btn-leve btn-sm" data-demo="ana@aulanet.com|123456">usar</button></td></tr>
+            <tr><td>Admin</td><td>admin@aulanet.com</td><td>admin123</td><td><button class="btn btn-leve btn-sm" data-demo="admin@aulanet.com|admin123">usar</button></td></tr>
+        </table>
+    </div>
+</main>
+<script>
+    if (new URLSearchParams(location.search).has('expirado')) {
+        document.getElementById('aviso').innerHTML = '<div class="alerta-box" style="margin-bottom:14px">Sua sessão expirou. Entre novamente.</div>';
+    }
+    document.querySelectorAll('[data-demo]').forEach(b => b.addEventListener('click', () => {
+        const [e, s] = b.dataset.demo.split('|');
+        document.getElementById('email').value = e;
+        document.getElementById('senha').value = s;
+    }));
+    document.getElementById('form').addEventListener('submit', async ev => {
+        ev.preventDefault();
+        try {
+            const r = await Api.post('/api/auth/login', {
+                email: document.getElementById('email').value,
+                senha: document.getElementById('senha').value
+            });
+            Api.salvarSessao(r);
+            const volta = new URLSearchParams(location.search).get('voltar');
+            location.href = volta && volta.startsWith('professor.html') ? volta : Api.paginaInicial(r.usuario.papel);
+        } catch (e) { toast(e.message, 'erro'); }
+    });
+</script>
+</body>
+</html>

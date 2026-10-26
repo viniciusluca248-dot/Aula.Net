@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Perfil do professor — Aula.net</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎓</text></svg>">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="js/api.js"></script>
+</head>
+<body>
+<nav class="nav" id="nav"></nav>
+<main class="container">
+    <section class="card" id="perfil"><div class="vazio">Carregando...</div></section>
+
+    <div class="grid grid-2 mt">
+        <section class="card">
+            <h3>Serviços oferecidos</h3>
+            <div id="ofertas" class="mt"></div>
+        </section>
+        <section class="card" id="boxAgendar">
+            <h3>Solicitar aula</h3>
+            <div class="passos"><span class="passo">1 Serviço</span><span class="passo">2 Data</span><span class="passo">3 Horário</span><span class="passo">4 Duração</span><span class="passo">5 Enviar</span></div>
+            <form id="formAgendar">
+                <div class="campo"><label for="oferta">Serviço</label><select id="oferta" required></select></div>
+                <div class="linha">
+                    <div class="campo"><label for="data">Data</label><input id="data" type="date" required></div>
+                    <div class="campo"><label for="hora">Horário</label><input id="hora" type="time" required value="14:00"></div>
+                </div>
+                <div class="campo"><label for="duracao">Duração</label>
+                    <select id="duracao"><option value="60">1 hora</option><option value="90">1h30</option><option value="120">2 horas</option><option value="180">3 horas</option></select></div>
+                <div class="entre"><span>Valor estimado: <strong id="estimado">-</strong></span>
+                    <button class="btn" type="submit">Solicitar agendamento</button></div>
+                <p class="pequeno suave">O professor confirma ou recusa a solicitação. O pagamento é gerado quando a aula for concluída.</p>
+            </form>
+        </section>
+    </div>
+
+    <section class="card mt">
+        <h3>Avaliações dos alunos</h3>
+        <div id="avaliacoes"></div>
+    </section>
+</main>
+<script>
+    const params = new URLSearchParams(location.search);
+    const professorId = params.get('id');
+    let ofertas = [];
+
+    function estimar() {
+        const o = ofertas.find(x => x.id == document.getElementById('oferta').value);
+        const min = +document.getElementById('duracao').value;
+        document.getElementById('estimado').textContent = o ? fmt.moeda(o.valorHora * min / 60) : '-';
+    }
+
+    async function carregar() {
+        let p;
+        try { p = await Api.get('/api/professores/' + professorId); }
+        catch (e) { document.getElementById('perfil').innerHTML = '<div class="vazio">Professor não encontrado.</div>'; return; }
+        ofertas = p.ofertas;
+        document.title = p.nome + ' — Aula.net';
+        document.getElementById('perfil').innerHTML = `
+            <div class="prof-topo">
+                <div class="avatar avatar-g">${fmt.iniciais(p.nome)}</div>
+                <div>
+                    <h1 style="margin:0">${esc(p.nome)}</h1>
+                    <div>${fmt.estrelas(p.mediaAvaliacao)} <span class="suave">(${p.totalAvaliacoes} avaliações)</span></div>
+                    <div class="mt" style="margin-top:6px">${[...p.disciplinas].map(d => `<span class="selo">${esc(d)}</span>`).join(' ')}
+                        ${[...p.modalidades].map(selo).join(' ')}</div>
+                </div>
+            </div>
+            <p class="mt">${esc(p.bio || 'Este professor ainda não escreveu uma apresentação.')}</p>`;
+        document.getElementById('ofertas').innerHTML = ofertas.length ? `<div class="tabela-wrap"><table>
+            <tr><th>Disciplina</th><th>Modalidade</th><th class="num">Valor/hora</th></tr>
+            ${ofertas.map(o => `<tr><td>${esc(o.disciplina)}</td><td>${selo(o.modalidade)}</td><td class="num">${fmt.moeda(o.valorHora)}</td></tr>`).join('')}
+            </table></div>` : '<div class="vazio">Nenhum serviço cadastrado.</div>';
+        const sel = document.getElementById('oferta');
+        sel.innerHTML = ofertas.map(o => `<option value="${o.id}">${esc(o.disciplina)} — ${fmt.rotulo(o.modalidade)} — ${fmt.moeda(o.valorHora)}/h</option>`).join('');
+        if (params.get('oferta')) sel.value = params.get('oferta');
+        estimar();
+        document.getElementById('avaliacoes').innerHTML = p.avaliacoes.length ? p.avaliacoes.map(a => `
+            <div style="border-bottom:1px solid var(--borda);padding:10px 0">
+                <strong>${esc(a.alunoNome)}</strong> ${fmt.estrelas(a.nota)}
+                <div class="suave">${esc(a.comentario || '')}</div></div>`).join('') : '<div class="vazio">Ainda sem avaliações.</div>';
+    }
+
+    const u = Api.usuario();
+    const amanha = new Date(); amanha.setDate(amanha.getDate() + 1);
+    document.getElementById('data').min = fmt.iso(new Date());
+    document.getElementById('data').value = fmt.iso(amanha);
+    ['oferta', 'duracao'].forEach(id => document.getElementById(id).addEventListener('change', estimar));
+
+    if (u && u.papel !== 'ALUNO') {
+        document.getElementById('boxAgendar').innerHTML = '<h3>Solicitar aula</h3><div class="vazio">Apenas alunos podem solicitar aulas.</div>';
+    }
+
+    document.getElementById('formAgendar').addEventListener('submit', async ev => {
+        ev.preventDefault();
+        if (!Api.usuario()) { location.href = 'login.html?voltar=' + encodeURIComponent('professor.html' + location.search); return; }
+        await acao(() => Api.post('/api/agendamentos', {
+            ofertaId: +document.getElementById('oferta').value,
+            dataAula: document.getElementById('data').value,
+            horarioInicio: document.getElementById('hora').value,
+            duracaoMinutos: +document.getElementById('duracao').value
+        }), 'Solicitação enviada! Acompanhe em "Meu painel".');
+        setTimeout(() => location.href = 'aluno.html', 1200);
+    });
+
+    carregar();
+</script>
+</body>
+</html>
