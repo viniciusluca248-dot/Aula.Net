@@ -114,6 +114,12 @@ public class DadosIniciais implements CommandLineRunner {
         concluida(joao, anaFis, hoje.minusMonths(2).withDayOfMonth(12), "16:00", 90, true, 4, "Boa didática.");
         concluida(maria, carlosIng, hoje.minusMonths(2).withDayOfMonth(20), "18:00", 60, true, 5, "Aula dinâmica.");
         concluida(joao, biaProg, hoje.minusMonths(1).withDayOfMonth(8), "19:00", 120, true, 5, "Aprendi Spring Boot!");
+        // aluno já quitou, mas o administrador ainda não registrou a transferência: repasse liberado
+        Agendamento quitada = concluida(joao, biaRed, hoje.minusDays(12), "17:00", 60, true, 0, null);
+        pagamentos.findByAluno(joao.getId()).stream()
+                .filter(p -> p.getAgendamento().getId().equals(quitada.getId())).findFirst()
+                .flatMap(p -> repasses.findByPagamentoId(p.getId()))
+                .ifPresent(r -> r.setStatus(StatusRepasse.PENDENTE));
         concluida(maria, biaRed, hoje.minusMonths(1).withDayOfMonth(15), "10:00", 60, false, 0, null);
 
         // Aula concluída, parcelada em 3x, com a 1ª parcela vencida (demonstra multa por atraso - RF13)

@@ -82,12 +82,14 @@
             ${rs.map(r => `<tr><td>${esc(r.professorNome)}</td><td>${fmt.data(r.dataAula)} · ${esc(r.disciplina)}</td><td>${esc(r.alunoNome)}</td>
                 <td class="num">${fmt.moeda(r.valorBruto)}</td><td class="num">${fmt.moeda(r.valorComissao)}</td><td class="num"><strong>${fmt.moeda(r.valorLiquido)}</strong></td>
                 <td>${r.pagamentoQuitado ? selo('PAGO') : selo('PENDENTE')}</td><td>${selo(r.status)}</td>
-                <td>${r.status === 'PENDENTE' ? `<button class="btn btn-verde btn-sm" onclick="realizar(${r.id}, ${r.pagamentoQuitado})">Realizar</button>` : ''}</td></tr>`).join('')}</table>`
+                <td>${r.status === 'PENDENTE' ? (r.pagamentoQuitado
+                    ? `<button class="btn btn-verde btn-sm" onclick="realizar(${r.id})">Registrar transferência</button>`
+                    : '<span class="pequeno suave">aguardando quitação</span>') : ''}</td></tr>`).join('')}</table>`
             : '<div class="vazio">Nenhum repasse.</div>';
     }
-    async function realizar(id, quitado) {
-        if (!confirm(quitado ? 'Confirmar o repasse ao professor?' : 'O aluno ainda não quitou este pagamento. Antecipar o repasse mesmo assim?')) return;
-        await acao(() => Api.patch(`/api/admin/repasses/${id}/realizar`), 'Repasse realizado.');
+    async function realizar(id) {
+        if (!confirm('Registrar a transferência do valor líquido ao professor?')) return;
+        await acao(() => Api.patch(`/api/admin/repasses/${id}/realizar`), 'Repasse registrado como realizado.');
         carregarRepasses();
     }
 
@@ -117,7 +119,13 @@
 
     async function carregarDisciplinas() {
         const ds = await Api.get('/api/disciplinas');
-        document.getElementById('disciplinas').innerHTML = '<h3>Disciplinas</h3>' + ds.map(d => `<span class="selo" style="margin:3px">${esc(d.nome)}</span>`).join('');
+        document.getElementById('disciplinas').innerHTML = '<h3>Disciplinas</h3>' + ds.map(d =>
+            `<span class="selo" style="margin:3px">${esc(d.nome)} <a href="#" title="Excluir" onclick="excluirDisciplina(${d.id}); return false">✕</a></span>`).join('');
+    }
+    async function excluirDisciplina(id) {
+        if (!confirm('Excluir esta disciplina?')) return;
+        await acao(() => Api.del('/api/admin/disciplinas/' + id), 'Disciplina excluída.');
+        carregarDisciplinas();
     }
     document.getElementById('formDisc').addEventListener('submit', async ev => {
         ev.preventDefault();

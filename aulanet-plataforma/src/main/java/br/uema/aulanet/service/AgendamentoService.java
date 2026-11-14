@@ -9,6 +9,7 @@ import br.uema.aulanet.model.*;
 import br.uema.aulanet.repository.AgendamentoRepository;
 import br.uema.aulanet.repository.AvaliacaoRepository;
 import br.uema.aulanet.repository.OfertaAulaRepository;
+import br.uema.aulanet.security.UsuarioLogado;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -58,26 +59,25 @@ public class AgendamentoService {
         a.setHorarioInicio(req.horarioInicio());
         a.setDuracaoMinutos(req.duracaoMinutos());
         a.setStatus(StatusAgendamento.SOLICITADO);
+        verificarConflitoDoAluno(a);
         verificarConflito(a);
         return AgendamentoDTO.de(agendamentoRepository.save(a), false);
     }
 
     /** RF08: professor confirma. */
     @Transactional
-    public AgendamentoDTO confirmar(Integer professorId, Integer agendamentoId) {
-        Agendamento a = obterDoProfessor(professorId, agendamentoId);
-        exigirStatus(a, StatusAgendamento.SOLICITADO);
+    public AgendamentoDTO confirmar(Integer idAgendamento, UsuarioLogado professor) {
+        Agendamento a = obterDoProfessor(professor.getId(), idAgendamento);
         verificarConflito(a);
-        a.setStatus(StatusAgendamento.CONFIRMADO);
+        a.confirmar();
         return AgendamentoDTO.de(a, false);
     }
 
     /** RF08: professor recusa (status CANCELADO). */
     @Transactional
-    public AgendamentoDTO recusar(Integer professorId, Integer agendamentoId) {
-        Agendamento a = obterDoProfessor(professorId, agendamentoId);
-        exigirStatus(a, StatusAgendamento.SOLICITADO);
-        a.setStatus(StatusAgendamento.CANCELADO);
+    public AgendamentoDTO recusar(Integer idAgendamento, UsuarioLogado professor) {
+        Agendamento a = obterDoProfessor(professor.getId(), idAgendamento);
+        a.recusar();
         return AgendamentoDTO.de(a, false);
     }
 
@@ -88,24 +88,24 @@ public class AgendamentoService {
         if (!a.getAluno().getId().equals(alunoId)) {
             throw new AcessoNegadoException("o agendamento pertence a outro aluno.");
         }
-        if (a.getStatus() != StatusAgendamento.SOLICITADO && a.getStatus() != StatusAgendamento.CONFIRMADO) {
-            throw new RegraNegocioException("Somente aulas solicitadas ou confirmadas podem ser canceladas.");
-        }
-        a.setStatus(StatusAgendamento.CANCELADO);
+        a.cancelar();
         return AgendamentoDTO.de(a, false);
     }
 
-    /** RF09: professor finaliza a aula e o pagamento é gerado automaticamente. */
+    /**
+     * RF09: professor finaliza a aula e o pagamento é gerado na mesma transação: se a geração falhar,
+     * a mudança de status é desfeita, e nunca há aula concluída sem pagamento.
+     */
     @Transactional
-    public AgendamentoDTO concluir(Integer professorId, Integer agendamentoId) {
-        Agendamento a = obterDoProfessor(professorId, agendamentoId);
-        exigirStatus(a, StatusAgendamento.CONFIRMADO);
-        if (LocalDateTime.of(a.getDataAula(), a.getHorarioInicio()).isAfter(LocalDateTime.now(clock))) {
+    public AgendamentoDTO concluir(Integer idAgendamento, UsuarioLogado professor) {
+        Agendamento agendamento = obterDoProfessor(professor.getId(), idAgendamento);
+        if (agendamento.getStatus() == StatusAgendamento.CONFIRMADO && LocalDateTime
+                .of(agendamento.getDataAula(), agendamento.getHorarioInicio()).isAfter(LocalDateTime.now(clock))) {
             throw new RegraNegocioException("A aula só pode ser concluída depois do horário de início.");
         }
-        a.setStatus(StatusAgendamento.CONCLUIDO);
-        financeiroService.gerarPagamento(a);
-        return AgendamentoDTO.de(a, false);
+        agendamento.concluir();
+        financeiroService.gerarPagamento(agendamento);
+        return AgendamentoDTO.de(agendamento, false);
     }
 
     @Transactional(readOnly = true)
@@ -135,18 +135,20 @@ public class AgendamentoService {
         Integer professorId = novo.getOferta().getProfessor().getId();
         boolean conflito = agendamentoRepository
                 .findByProfessorDataStatus(professorId, novo.getDataAula(), StatusAgendamento.CONFIRMADO).stream()
-                .filter(a -> !a.getId().equals(novo.getId()))
-                .anyMatch(a -> novo.getHorarioInicio().isBefore(a.getHorarioFim())
-                        && a.getHorarioInicio().isBefore(novo.getHorarioFim()));
+                .anyMatch(novo::sobrepoe);
         if (conflito) {
             throw new RegraNegocioException("O professor já possui uma aula confirmada neste horário.");
         }
     }
 
-    private void exigirStatus(Agendamento a, StatusAgendamento esperado) {
-        if (a.getStatus() != esperado) {
-            throw new RegraNegocioException("Operação inválida: o agendamento está " + a.getStatus()
-                    + " (esperado " + esperado + ").");
+    /** O aluno não pode ter duas aulas (solicitadas ou confirmadas) no mesmo horário. */
+    private void verificarConflitoDoAluno(Agendamento novo) {
+        boolean conflito = agendamentoRepository
+                .findByAlunoDataStatus(novo.getAluno().getId(), novo.getDataAula(),
+                        List.of(StatusAgendamento.SOLICITADO, StatusAgendamento.CONFIRMADO)).stream()
+                .anyMatch(novo::sobrepoe);
+        if (conflito) {
+            throw new RegraNegocioException("Você já tem uma aula solicitada ou confirmada neste horário.");
         }
     }
 

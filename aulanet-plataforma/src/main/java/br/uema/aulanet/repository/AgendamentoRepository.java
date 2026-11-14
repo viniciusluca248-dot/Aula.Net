@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 
 public interface AgendamentoRepository extends JpaRepository<Agendamento, Integer> {
@@ -34,6 +35,11 @@ public interface AgendamentoRepository extends JpaRepository<Agendamento, Intege
     List<Agendamento> findByProfessorDataStatus(@Param("professorId") Integer professorId,
                                                 @Param("data") LocalDate data,
                                                 @Param("status") StatusAgendamento status);
+
+    @Query(FETCH + "where a.aluno.id = :alunoId and a.dataAula = :data and a.status in :status")
+    List<Agendamento> findByAlunoDataStatus(@Param("alunoId") Integer alunoId,
+                                            @Param("data") LocalDate data,
+                                            @Param("status") Collection<StatusAgendamento> status);
 
     long countByStatus(StatusAgendamento status);
 }

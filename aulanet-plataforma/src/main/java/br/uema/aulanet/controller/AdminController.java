@@ -80,4 +80,10 @@ public class AdminController {
     public Disciplina criarDisciplina(@Valid @RequestBody DisciplinaRequest req) {
         return disciplinaService.criar(req.nome());
     }
+
+    @DeleteMapping("/disciplinas/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void excluirDisciplina(@PathVariable Integer id) {
+        disciplinaService.excluir(id);
+    }
 }

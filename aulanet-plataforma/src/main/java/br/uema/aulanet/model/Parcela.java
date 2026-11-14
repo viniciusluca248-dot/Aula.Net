@@ -23,7 +23,7 @@ public class Parcela {
     @Column(name = "numero_parcela", nullable = false)
     private Integer numeroParcela;
 
-    /** Valor da parcela já com juros de parcelamento (sem multa). */
+    /** Valor da prestação gravado na contratação (Tabela Price); a decomposição em juros é recalculada sob demanda. */
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal valor;
 
@@ -34,14 +34,17 @@ public class Parcela {
     @Column(length = 20)
     private StatusParcela status = StatusParcela.PENDENTE;
 
+    /** Juros de mora (pro rata die), recalculados a cada dia de atraso. */
     @Column(name = "valor_juros", precision = 10, scale = 2)
     private BigDecimal valorJuros = BigDecimal.ZERO;
 
+    /** Multa moratória, aplicada uma única vez quando a parcela entra em atraso. */
     @Column(name = "valor_multa", precision = 10, scale = 2)
     private BigDecimal valorMulta = BigDecimal.ZERO;
 
     public BigDecimal getValorAPagar() {
-        return valor.add(valorMulta == null ? BigDecimal.ZERO : valorMulta);
+        return valor.add(valorMulta == null ? BigDecimal.ZERO : valorMulta)
+                .add(valorJuros == null ? BigDecimal.ZERO : valorJuros);
     }
 
     public Integer getId() { return id; }

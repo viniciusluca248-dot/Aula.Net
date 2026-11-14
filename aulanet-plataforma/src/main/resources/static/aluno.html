@@ -40,8 +40,11 @@
         <div class="campo"><label for="mpParcelas">Número de parcelas</label><select id="mpParcelas"></select></div>
         <div class="card" style="background:var(--fundo)">
             <div class="entre"><span>Valor de cada parcela</span><strong id="mpValorParcela" style="font-size:1.3rem">-</strong></div>
-            <div class="entre pequeno suave"><span>Total com juros</span><span id="mpTotal">-</span></div>
-            <div class="entre pequeno suave"><span>Juros (Tabela Price, <span id="mpTaxa"></span> a.m.)</span><span id="mpJuros">-</span></div>
+            <div class="entre pequeno"><span>Taxa de juros</span><span id="mpTaxa">-</span></div>
+            <div class="entre pequeno"><span>Total sem financiamento (à vista)</span><span id="mpAVista">-</span></div>
+            <div class="entre pequeno"><span>Total a pagar parcelado</span><strong id="mpTotal">-</strong></div>
+            <div class="entre pequeno suave"><span>Juros do parcelamento (Tabela Price)</span><span id="mpJuros">-</span></div>
+            <p class="pequeno suave" style="margin:8px 0 0">Em caso de atraso: multa de 2% e juros de mora de 1% ao mês, proporcionais aos dias.</p>
         </div>
         <div class="entre mt">
             <button class="btn btn-leve" onclick="fecharModal('mPagamento')">Cancelar</button>
@@ -102,11 +105,11 @@
                         ${p.podeParcelar ? `<button class="btn btn-sec btn-sm mt" onclick="abrirParcelamento(${p.id})">Alterar forma de pagamento</button>` : ''}</div>
                 </div>
                 <div class="tabela-wrap mt"><table>
-                    <tr><th>Parcela</th><th>Vencimento</th><th class="num">Valor</th><th class="num">Juros</th><th class="num">Multa/mora</th><th class="num">A pagar</th><th>Status</th><th></th></tr>
+                    <tr><th>Parcela</th><th>Vencimento</th><th class="num">Valor</th><th class="num">Multa</th><th class="num">Juros de mora</th><th class="num">A pagar</th><th>Status</th><th></th></tr>
                     ${p.parcelas.map(x => `<tr>
                         <td>${x.numeroParcela}/${p.qtdParcelas}</td><td>${fmt.data(x.dataVencimento)}</td>
-                        <td class="num">${fmt.moeda(x.valor)}</td><td class="num">${fmt.moeda(x.valorJuros)}</td>
-                        <td class="num">${fmt.moeda(x.valorMulta)}</td><td class="num"><strong>${fmt.moeda(x.valorAPagar)}</strong></td>
+                        <td class="num">${fmt.moeda(x.valor)}</td><td class="num">${fmt.moeda(x.valorMulta)}</td>
+                        <td class="num">${fmt.moeda(x.valorJuros)}</td><td class="num"><strong>${fmt.moeda(x.valorAPagar)}</strong></td>
                         <td>${selo(x.status)}</td>
                         <td>${x.status !== 'PAGO' ? `<button class="btn btn-verde btn-sm" onclick="pagar(${x.id}, '${fmt.moeda(x.valorAPagar)}')">Pagar</button>` : ''}</td>
                     </tr>`).join('')}
@@ -126,9 +129,12 @@
         const n = document.getElementById('mpParcelas').value;
         const s = await Api.get(`/api/pagamentos/simulacao?valor=${pagamentoAtual.valorTotal}&parcelas=${n}`);
         document.getElementById('mpValorParcela').textContent = `${n}x ${fmt.moeda(s.valorParcela)}`;
+        document.getElementById('mpAVista').textContent = fmt.moeda(s.valorAVista);
         document.getElementById('mpTotal').textContent = fmt.moeda(s.totalComJuros);
         document.getElementById('mpJuros').textContent = fmt.moeda(s.totalJuros);
-        document.getElementById('mpTaxa').textContent = fmt.pct(s.taxaJurosMensal * 100);
+        // art. 52 do CDC: informar a taxa mensal e a taxa efetiva anual antes da contratação
+        document.getElementById('mpTaxa').textContent = Number(s.taxaJurosMensal) === 0 ? 'sem juros'
+            : `${fmt.pct(s.taxaJurosMensal * 100)} ao mês · ${fmt.pct(s.taxaEfetivaAnual * 100)} ao ano (taxa efetiva)`;
     }
     function abrirParcelamento(id) {
         pagamentoAtual = pagamentos.find(p => p.id === id);

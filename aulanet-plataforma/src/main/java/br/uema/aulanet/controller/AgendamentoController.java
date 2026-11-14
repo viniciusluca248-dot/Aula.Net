@@ -75,18 +75,18 @@ public class AgendamentoController {
     @PatchMapping("/{id}/confirmar")
     @PreAuthorize("hasRole('PROFESSOR')")
     public AgendamentoDTO confirmar(@AuthenticationPrincipal UsuarioLogado u, @PathVariable Integer id) {
-        return agendamentoService.confirmar(u.getId(), id);
+        return agendamentoService.confirmar(id, u);
     }
 
     @PatchMapping("/{id}/recusar")
     @PreAuthorize("hasRole('PROFESSOR')")
     public AgendamentoDTO recusar(@AuthenticationPrincipal UsuarioLogado u, @PathVariable Integer id) {
-        return agendamentoService.recusar(u.getId(), id);
+        return agendamentoService.recusar(id, u);
     }
 
     @PatchMapping("/{id}/concluir")
     @PreAuthorize("hasRole('PROFESSOR')")
     public AgendamentoDTO concluir(@AuthenticationPrincipal UsuarioLogado u, @PathVariable Integer id) {
-        return agendamentoService.concluir(u.getId(), id);
+        return agendamentoService.concluir(id, u);
     }
 }

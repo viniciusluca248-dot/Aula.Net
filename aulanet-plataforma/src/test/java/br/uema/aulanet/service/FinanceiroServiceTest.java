@@ -39,8 +39,8 @@ class FinanceiroServiceTest {
     @BeforeEach
     void setUp() {
         var calc = new CalculadoraFinanceira(new AulanetProperties(new AulanetProperties.Jwt("x", 8),
-                new AulanetProperties.Financeiro(new BigDecimal("0.0199"), 12, new BigDecimal("0.02"),
-                        new BigDecimal("0.00033"), new BigDecimal("10"), 7)));
+                new AulanetProperties.Financeiro(new BigDecimal("0.02"), 1, 12, new BigDecimal("0.02"),
+                        new BigDecimal("0.01"), new BigDecimal("10"), 7)));
         Clock clock = Clock.fixed(HOJE.atStartOfDay(ZoneId.systemDefault()).toInstant(), ZoneId.systemDefault());
         service = new FinanceiroService(pagamentoRepository, parcelaRepository, repasseRepository, calc, clock);
     }
@@ -85,6 +85,18 @@ class FinanceiroServiceTest {
     }
 
     @Test
+    void repasseDescontaComissaoDaOfertaSobreOValorDaAula() {
+        // exemplo do Capítulo 6: aula de R$ 300,00 com comissão de 15% → R$ 255,00 líquidos
+        service.gerarPagamento(aula(180, "100.00", "15.00"));
+
+        ArgumentCaptor<Repasse> cap = ArgumentCaptor.forClass(Repasse.class);
+        verify(repasseRepository).save(cap.capture());
+        assertThat(cap.getValue().getValorBruto()).isEqualByComparingTo("300.00");
+        assertThat(cap.getValue().getValorComissao()).isEqualByComparingTo("45.00");
+        assertThat(cap.getValue().getValorLiquido()).isEqualByComparingTo("255.00");
+    }
+
+    @Test
     void naoGeraPagamentoDuplicado() {
         when(pagamentoRepository.existsByAgendamentoId(anyInt())).thenReturn(true);
         assertThatThrownBy(() -> service.gerarPagamento(aula(60, "50", "10"))).isInstanceOf(RegraNegocioException.class);
@@ -101,7 +113,7 @@ class FinanceiroServiceTest {
         assertThat(dto.tipo()).isEqualTo(TipoPagamento.PARCELADO);
         assertThat(dto.parcelas()).hasSize(3);
         assertThat(dto.parcelas().get(1).dataVencimento()).isEqualTo(HOJE.plusDays(7).plusMonths(1));
-        assertThat(dto.parcelas().get(0).valor()).isEqualByComparingTo("104.01");
+        assertThat(dto.parcelas().get(0).valor()).isEqualByComparingTo("104.03");
     }
 
     @Test
@@ -124,35 +136,52 @@ class FinanceiroServiceTest {
     }
 
     @Test
-    void pagarUltimaParcelaRealizaRepasse() {
+    void repasseSoERealizadoPeloAdminDepoisDaQuitacao() {
         Pagamento p = service.gerarPagamento(aula(60, "100.00", "10"));
         p.setId(5);
         Parcela parcela = p.getParcelas().get(0);
         parcela.setId(7);
         Repasse r = new Repasse();
+        r.setPagamento(p);
+        r.setProfessor(p.getAgendamento().getOferta().getProfessor());
+        when(repasseRepository.findById(3)).thenReturn(Optional.of(r));
         when(parcelaRepository.findById(7)).thenReturn(Optional.of(parcela));
         when(pagamentoRepository.findDetalhado(5)).thenReturn(Optional.of(p));
-        when(repasseRepository.findByPagamentoId(5)).thenReturn(Optional.of(r));
+
+        // antes da quitação o administrador não consegue registrar a transferência
+        assertThatThrownBy(() -> service.realizarRepasse(3)).isInstanceOf(RegraNegocioException.class);
 
         var dto = service.pagarParcela(2, 7);
-
         assertThat(dto.quitado()).isTrue();
-        assertThat(r.getStatus()).isEqualTo(StatusRepasse.REALIZADO);
+        assertThat(r.getStatus()).isEqualTo(StatusRepasse.PENDENTE);  // liberado, mas ainda não transferido
+
+        assertThat(service.realizarRepasse(3).status()).isEqualTo(StatusRepasse.REALIZADO);
     }
 
     @Test
-    void tarefaDiariaMarcaAtrasoECalculaMulta() {
+    void multaUnicaEJurosDeMoraProporcionaisAosDias() {
+        // exemplo do Capítulo 6: R$ 100,00 com 30 dias de atraso → multa R$ 2,00 e mora R$ 1,00 (1% a.m.)
         Parcela vencida = new Parcela();
         vencida.setValor(new BigDecimal("100.00"));
-        vencida.setDataVencimento(HOJE.minusDays(10));
+        vencida.setDataVencimento(HOJE.minusDays(30));
         vencida.setStatus(StatusParcela.PENDENTE);
-        when(parcelaRepository.findVencidas(any(), any())).thenReturn(List.of(vencida));
+        when(parcelaRepository.findByStatusInAndDataVencimentoBefore(any(), any())).thenReturn(List.of(vencida));
 
-        int n = service.processarAtrasos();
-
-        assertThat(n).isEqualTo(1);
+        assertThat(service.processarAtrasos()).isEqualTo(1);
         assertThat(vencida.getStatus()).isEqualTo(StatusParcela.ATRASADO);
-        assertThat(vencida.getValorMulta()).isEqualByComparingTo("2.33");
-        assertThat(vencida.getValorAPagar()).isEqualByComparingTo("102.33");
+        assertThat(vencida.getValorMulta()).isEqualByComparingTo("2.00");
+        assertThat(vencida.getValorJuros()).isEqualByComparingTo("1.00");
+        assertThat(vencida.getValorAPagar()).isEqualByComparingTo("103.00");
+
+        // rodar de novo no mesmo dia não muda nada (idempotente); a multa não é cobrada duas vezes
+        service.processarAtrasos();
+        assertThat(vencida.getValorMulta()).isEqualByComparingTo("2.00");
+        assertThat(vencida.getValorJuros()).isEqualByComparingTo("1.00");
+
+        // 15 dias de atraso: a mora é proporcional (R$ 0,50) e a multa continua R$ 2,00
+        vencida.setDataVencimento(HOJE.minusDays(15));
+        service.processarAtrasos();
+        assertThat(vencida.getValorMulta()).isEqualByComparingTo("2.00");
+        assertThat(vencida.getValorJuros()).isEqualByComparingTo("0.50");
     }
 }

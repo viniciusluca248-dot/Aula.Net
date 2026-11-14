@@ -7,6 +7,7 @@ import br.uema.aulanet.model.*;
 import br.uema.aulanet.repository.AgendamentoRepository;
 import br.uema.aulanet.repository.AvaliacaoRepository;
 import br.uema.aulanet.repository.OfertaAulaRepository;
+import br.uema.aulanet.security.UsuarioLogado;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,6 +22,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -54,6 +56,25 @@ class AgendamentoServiceTest {
         oferta.setModalidade(Modalidade.PRESENCIAL);
         oferta.setValorHora(new BigDecimal("60.00"));
         oferta.setPercentualComissao(BigDecimal.TEN);
+    }
+
+    private static UsuarioLogado logado(int id) {
+        Usuario u = new Usuario("Prof", "p" + id + "@x.com", "h", null, null, Papel.PROFESSOR);
+        u.setId(id);
+        return new UsuarioLogado(u);
+    }
+
+    @Test
+    void alunoNaoPodeTerDuasAulasNoMesmoHorario() {
+        when(ofertaRepository.findById(3)).thenReturn(Optional.of(oferta));
+        when(usuarioService.obter(2)).thenReturn(aluno);
+        Agendamento existente = agendamento(11, StatusAgendamento.SOLICITADO, LocalTime.of(14, 30), 60);
+        when(agendamentoRepository.findByAlunoDataStatus(eq(2), eq(HOJE.plusDays(1)), any()))
+                .thenReturn(List.of(existente));
+
+        assertThatThrownBy(() -> service.solicitar(2, new AgendamentoRequest(3, HOJE.plusDays(1), LocalTime.of(14, 0), 60)))
+                .isInstanceOf(RegraNegocioException.class);
+        verify(agendamentoRepository, never()).save(any());
     }
 
     private Agendamento agendamento(int id, StatusAgendamento status, LocalTime inicio, int minutos) {
@@ -95,7 +116,7 @@ class AgendamentoServiceTest {
         when(agendamentoRepository.findByProfessorDataStatus(1, novo.getDataAula(), StatusAgendamento.CONFIRMADO))
                 .thenReturn(List.of(existente));
 
-        assertThatThrownBy(() -> service.confirmar(1, 10)).isInstanceOf(RegraNegocioException.class);
+        assertThatThrownBy(() -> service.confirmar(10, logado(1))).isInstanceOf(RegraNegocioException.class);
         assertThat(novo.getStatus()).isEqualTo(StatusAgendamento.SOLICITADO);
     }
 
@@ -103,14 +124,14 @@ class AgendamentoServiceTest {
     void professorDeOutraAulaNaoPodeConfirmar() {
         when(agendamentoRepository.findById(10))
                 .thenReturn(Optional.of(agendamento(10, StatusAgendamento.SOLICITADO, LocalTime.NOON, 60)));
-        assertThatThrownBy(() -> service.confirmar(99, 10)).isInstanceOf(AcessoNegadoException.class);
+        assertThatThrownBy(() -> service.confirmar(10, logado(99))).isInstanceOf(AcessoNegadoException.class);
     }
 
     @Test
     void recusarMudaParaCancelado() {
         Agendamento a = agendamento(10, StatusAgendamento.SOLICITADO, LocalTime.NOON, 60);
         when(agendamentoRepository.findById(10)).thenReturn(Optional.of(a));
-        assertThat(service.recusar(1, 10).status()).isEqualTo(StatusAgendamento.CANCELADO);
+        assertThat(service.recusar(10, logado(1)).status()).isEqualTo(StatusAgendamento.CANCELADO);
     }
 
     @Test
@@ -118,7 +139,7 @@ class AgendamentoServiceTest {
         Agendamento futura = agendamento(10, StatusAgendamento.CONFIRMADO, LocalTime.NOON, 60);
         when(agendamentoRepository.findById(10)).thenReturn(Optional.of(futura));
 
-        assertThatThrownBy(() -> service.concluir(1, 10)).isInstanceOf(RegraNegocioException.class);
+        assertThatThrownBy(() -> service.concluir(10, logado(1))).isInstanceOf(RegraNegocioException.class);
         assertThat(futura.getStatus()).isEqualTo(StatusAgendamento.CONFIRMADO);
         verifyNoInteractions(financeiroService);
     }
@@ -128,11 +149,11 @@ class AgendamentoServiceTest {
         Agendamento solicitado = agendamento(10, StatusAgendamento.SOLICITADO, LocalTime.NOON, 60);
         solicitado.setDataAula(HOJE.minusDays(1));
         when(agendamentoRepository.findById(10)).thenReturn(Optional.of(solicitado));
-        assertThatThrownBy(() -> service.concluir(1, 10)).isInstanceOf(RegraNegocioException.class);
+        assertThatThrownBy(() -> service.concluir(10, logado(1))).isInstanceOf(RegraNegocioException.class);
         verifyNoInteractions(financeiroService);
 
         solicitado.setStatus(StatusAgendamento.CONFIRMADO);
-        assertThat(service.concluir(1, 10).status()).isEqualTo(StatusAgendamento.CONCLUIDO);
+        assertThat(service.concluir(10, logado(1)).status()).isEqualTo(StatusAgendamento.CONCLUIDO);
         verify(financeiroService).gerarPagamento(solicitado);
     }
 }

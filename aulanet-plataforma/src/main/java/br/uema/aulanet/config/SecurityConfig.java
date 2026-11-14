@@ -17,7 +17,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 /**
- * RF03 / RNF03 / RNF04: API stateless com JWT, BCrypt (custo 10) e controle de acesso por papel.
+ * RF03 / RNF03 / RNF04: API stateless com JWT, BCrypt (custo 12) e controle de acesso por papel.
  * Requisições sem token válido recebem 401; papel insuficiente recebe 403.
  */
 @Configuration
@@ -62,7 +62,7 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder(10);
+        return new BCryptPasswordEncoder(12);   // RNF03: fator de custo >= 10
     }
 
     @Bean

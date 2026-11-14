@@ -220,7 +220,8 @@
             <tr><th>Aula</th><th>Aluno</th><th class="num">Bruto</th><th class="num">Comissão</th><th class="num">Líquido</th><th>Status</th></tr>
             ${f.repasses.map(r => `<tr><td>${fmt.data(r.dataAula)} · ${esc(r.disciplina)}</td><td>${esc(r.alunoNome)}</td>
                 <td class="num">${fmt.moeda(r.valorBruto)}</td><td class="num">${fmt.moeda(r.valorComissao)}</td>
-                <td class="num"><strong>${fmt.moeda(r.valorLiquido)}</strong></td><td>${selo(r.status)}</td></tr>`).join('')}</table>`
+                <td class="num"><strong>${fmt.moeda(r.valorLiquido)}</strong></td>
+                <td>${r.status === 'PENDENTE' && r.pagamentoQuitado ? '<span class="selo selo-CONFIRMADO">Liberado</span>' : selo(r.status)}</td></tr>`).join('')}</table>`
             : '<div class="vazio">Nenhum repasse ainda.</div>';
     }
 

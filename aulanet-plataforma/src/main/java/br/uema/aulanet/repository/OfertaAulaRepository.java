@@ -31,6 +31,8 @@ public interface OfertaAulaRepository extends JpaRepository<OfertaAula, Integer>
     @Query("select o from OfertaAula o join fetch o.disciplina join fetch o.professor where o.professor.id = :professorId order by o.disciplina.nome")
     List<OfertaAula> findByProfessorId(@Param("professorId") Integer professorId);
 
+    boolean existsByDisciplinaId(Integer disciplinaId);
+
     @Query("select o from OfertaAula o join fetch o.disciplina join fetch o.professor order by o.professor.nome")
     List<OfertaAula> findAllComDetalhes();
 }

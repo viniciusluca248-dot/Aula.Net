@@ -1,5 +1,6 @@
 package br.uema.aulanet.model;
 
+import br.uema.aulanet.exception.RegraNegocioException;
 import jakarta.persistence.*;
 
 import java.time.LocalDate;
@@ -38,6 +39,47 @@ public class Agendamento {
     @Enumerated(EnumType.STRING)
     @Column(length = 20)
     private StatusAgendamento status = StatusAgendamento.SOLICITADO;
+
+    // As transições de status ficam na própria entidade, para que nenhuma camada consiga contorná-las.
+
+    public void confirmar() {
+        exigirStatus(StatusAgendamento.SOLICITADO);
+        this.status = StatusAgendamento.CONFIRMADO;
+    }
+
+    public void recusar() {
+        exigirStatus(StatusAgendamento.SOLICITADO);
+        this.status = StatusAgendamento.CANCELADO;
+    }
+
+    public void concluir() {
+        exigirStatus(StatusAgendamento.CONFIRMADO);
+        this.status = StatusAgendamento.CONCLUIDO;
+    }
+
+    /** Cancelamento pelo aluno: permitido enquanto a aula está solicitada ou confirmada. */
+    public void cancelar() {
+        if (status != StatusAgendamento.SOLICITADO && status != StatusAgendamento.CONFIRMADO) {
+            throw new RegraNegocioException("Somente aulas solicitadas ou confirmadas podem ser canceladas.");
+        }
+        this.status = StatusAgendamento.CANCELADO;
+    }
+
+    private void exigirStatus(StatusAgendamento esperado) {
+        if (this.status != esperado) {
+            throw new RegraNegocioException(
+                    "Operação inválida: agendamento está " + status + ", esperado " + esperado + ".");
+        }
+    }
+
+    /** Duas aulas no mesmo dia se sobrepõem quando uma começa antes de a outra terminar. */
+    public boolean sobrepoe(Agendamento outro) {
+        return !this.equals(outro)
+                && (this.id == null || !this.id.equals(outro.getId()))
+                && this.dataAula.equals(outro.getDataAula())
+                && this.horarioInicio.isBefore(outro.getHorarioFim())
+                && outro.getHorarioInicio().isBefore(this.getHorarioFim());
+    }
 
     public LocalTime getHorarioFim() {
         return horarioInicio.plusMinutes(duracaoMinutos);

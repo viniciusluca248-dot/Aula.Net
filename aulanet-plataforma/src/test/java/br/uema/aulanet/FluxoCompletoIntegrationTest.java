@@ -79,52 +79,76 @@ class FluxoCompletoIntegrationTest {
     }
 
     @Test
-    void fluxoSolicitarConfirmarConcluirParcelarPagar() throws Exception {
-        String aluno = login("maria@aulanet.com", "123456");
-        String prof = login("carlos@aulanet.com", "123456");
+    void fluxoDoCadastroAoRepasse() throws Exception {
+        // 1. cadastro de professor e aluno (o cadastro já devolve o token de login)
+        String prof = json.readTree(mvc.perform(post("/api/auth/cadastro").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"nome\":\"Prof Fluxo\",\"email\":\"prof.fluxo@teste.com\",\"senha\":\"123456\",\"papel\":\"PROFESSOR\"}"))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString()).get("token").asText();
+        mvc.perform(post("/api/auth/cadastro").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"nome\":\"Aluno Fluxo\",\"email\":\"aluno.fluxo@teste.com\",\"senha\":\"123456\",\"papel\":\"ALUNO\"}"))
+                .andExpect(status().isCreated());
+        String aluno = login("aluno.fluxo@teste.com", "123456");
+        String admin = login("admin@aulanet.com", "admin123");
 
-        JsonNode ofertas = ler(mvc.perform(get("/api/ofertas").param("termo", "Carlos")));
-        int ofertaId = ofertas.get(0).get("id").asInt();
+        // 2. professor cadastra a oferta: R$ 100/h com 15% de comissão
+        int disciplinaId = ler(mvc.perform(get("/api/disciplinas"))).get(0).get("id").asInt();
+        int ofertaId = ler(mvc.perform(auth(post("/api/ofertas"), prof).content(
+                        "{\"disciplinaId\":" + disciplinaId + ",\"modalidade\":\"ONLINE\",\"valorHora\":100,\"percentualComissao\":15}"))
+                .andExpect(status().isCreated())).get("id").asInt();
+
+        // 3. aluno solicita 3 horas de aula
         String data = LocalDate.now().plusDays(20).toString();
+        String pedido = "{\"ofertaId\":" + ofertaId + ",\"dataAula\":\"" + data + "\",\"horarioInicio\":\"07:00\",\"duracaoMinutos\":180}";
+        int agId = ler(mvc.perform(auth(post("/api/agendamentos"), aluno).content(pedido))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.status").value("SOLICITADO"))).get("id").asInt();
+        // o aluno não pode ter outra aula no mesmo horário
+        mvc.perform(auth(post("/api/agendamentos"), aluno).content(pedido)).andExpect(status().isBadRequest());
+        // concluir sem confirmar é rejeitado
+        mvc.perform(auth(patch("/api/agendamentos/" + agId + "/concluir"), prof)).andExpect(status().isBadRequest());
 
-        // 1. aluno solicita
-        JsonNode ag = ler(mvc.perform(auth(post("/api/agendamentos"), aluno).content(
-                        "{\"ofertaId\":" + ofertaId + ",\"dataAula\":\"" + data + "\",\"horarioInicio\":\"07:00\",\"duracaoMinutos\":120}"))
-                .andExpect(status().isCreated()));
-        int agId = ag.get("id").asInt();
-        assertThat(ag.get("status").asText()).isEqualTo("SOLICITADO");
-
-        // 2. professor confirma e 3. conclui (gera pagamento)
+        // 4. professor confirma; a aula ainda não aconteceu, então não pode ser concluída
         mvc.perform(auth(patch("/api/agendamentos/" + agId + "/confirmar"), prof)).andExpect(jsonPath("$.status").value("CONFIRMADO"));
-        // aula ainda não aconteceu: não pode ser concluída
         mvc.perform(auth(patch("/api/agendamentos/" + agId + "/concluir"), prof)).andExpect(status().isBadRequest());
         // simula a passagem do tempo: a aula passa a ter sido ontem
         var aula = agendamentoRepository.findById(agId).orElseThrow();
         aula.setDataAula(LocalDate.now().minusDays(1));
         agendamentoRepository.save(aula);
+
+        // 5. conclusão gera pagamento e repasse; não pode concluir duas vezes
         mvc.perform(auth(patch("/api/agendamentos/" + agId + "/concluir"), prof)).andExpect(jsonPath("$.status").value("CONCLUIDO"));
         mvc.perform(auth(patch("/api/agendamentos/" + agId + "/concluir"), prof)).andExpect(status().isBadRequest());
 
-        // 4. aluno parcela em 2x e paga
-        JsonNode pagamentos = ler(mvc.perform(auth(get("/api/pagamentos/meus"), aluno)));
-        JsonNode pg = null;
-        for (JsonNode p : pagamentos) if (p.get("agendamentoId").asInt() == agId) pg = p;
-        assertThat(pg).isNotNull();
+        // 6. aluno simula e parcela em 3x pela Tabela Price
+        mvc.perform(auth(get("/api/pagamentos/simulacao").param("valor", "300").param("parcelas", "3"), aluno))
+                .andExpect(jsonPath("$.taxaEfetivaAnual").value(0.2682))
+                .andExpect(jsonPath("$.valorAVista").value(300.0));
+        JsonNode pg = ler(mvc.perform(auth(get("/api/pagamentos/meus"), aluno))).get(0);
+        assertThat(pg.get("valorTotal").decimalValue()).isEqualByComparingTo("300.00");
         JsonNode parcelado = ler(mvc.perform(auth(post("/api/pagamentos/" + pg.get("id").asInt() + "/parcelamento"), aluno)
-                .content("{\"qtdParcelas\":2}")).andExpect(status().isOk()));
+                .content("{\"qtdParcelas\":3}")).andExpect(status().isOk()));
         assertThat(parcelado.get("tipo").asText()).isEqualTo("PARCELADO");
-        assertThat(parcelado.get("parcelas")).hasSize(2);
+        assertThat(parcelado.get("parcelas")).hasSize(3);
 
+        // 7. repasse: R$ 300 − 15% = R$ 255; só pode ser realizado depois da quitação
+        JsonNode repasse = null;
+        for (JsonNode r : ler(mvc.perform(auth(get("/api/admin/repasses"), admin)))) {
+            if (r.get("pagamentoId").asInt() == pg.get("id").asInt()) repasse = r;
+        }
+        assertThat(repasse.get("valorLiquido").decimalValue()).isEqualByComparingTo("255.00");
+        mvc.perform(auth(patch("/api/admin/repasses/" + repasse.get("id").asInt() + "/realizar"), admin))
+                .andExpect(status().isBadRequest());
         JsonNode depois = null;
         for (JsonNode parcela : parcelado.get("parcelas")) {
             depois = ler(mvc.perform(auth(post("/api/parcelas/" + parcela.get("id").asInt() + "/pagar"), aluno)).andExpect(status().isOk()));
         }
         assertThat(depois.get("quitado").asBoolean()).isTrue();
+        mvc.perform(auth(patch("/api/admin/repasses/" + repasse.get("id").asInt() + "/realizar"), admin))
+                .andExpect(jsonPath("$.status").value("REALIZADO"));
 
-        // 5. aluno avalia; professor vê o painel
-        mvc.perform(auth(post("/api/avaliacoes"), aluno).content("{\"agendamentoId\":" + agId + ",\"nota\":5,\"comentario\":\"Top\"}"))
-                .andExpect(status().isCreated());
-        mvc.perform(auth(get("/api/financeiro/painel"), prof)).andExpect(status().isOk())
-                .andExpect(jsonPath("$.repassesRealizados").isNumber());
+        // 8. aluno avalia uma única vez; professor vê o repasse no painel
+        String avaliacao = "{\"agendamentoId\":" + agId + ",\"nota\":5,\"comentario\":\"Top\"}";
+        mvc.perform(auth(post("/api/avaliacoes"), aluno).content(avaliacao)).andExpect(status().isCreated());
+        mvc.perform(auth(post("/api/avaliacoes"), aluno).content(avaliacao)).andExpect(status().isBadRequest());
+        mvc.perform(auth(get("/api/financeiro/painel"), prof)).andExpect(jsonPath("$.repassesRealizados").value(255.0));
     }
 }

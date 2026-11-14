@@ -12,18 +12,17 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Cálculos financeiros puros (sem acesso a banco), sempre com BigDecimal.
+ * Matemática financeira pura (sem acesso a banco), sempre com BigDecimal e arredondamento a centavos.
  * <ul>
- *   <li>Parcelamento: juros compostos pela Tabela Price — PMT = PV · i / (1 − (1 + i)^−n).</li>
- *   <li>Atraso: multa única + juros de mora diários sobre o valor da parcela.</li>
- *   <li>Repasse: valor bruto − comissão (%) da plataforma.</li>
+ *   <li>Parcelamento: Tabela Price — PMT = PV · [i(1 + i)^n] / [(1 + i)^n − 1].</li>
+ *   <li>Atraso: multa única + juros de mora proporcionais aos dias (pro rata die).</li>
  * </ul>
  */
 @Component
 public class CalculadoraFinanceira {
 
-    private static final BigDecimal CEM = BigDecimal.valueOf(100);
-    private static final MathContext MC = MathContext.DECIMAL64;
+    private static final MathContext MC = new MathContext(20, RoundingMode.HALF_EVEN);
+    private static final BigDecimal TRINTA = BigDecimal.valueOf(30);
 
     private final AulanetProperties.Financeiro cfg;
 
@@ -31,6 +30,38 @@ public class CalculadoraFinanceira {
         this.cfg = props.financeiro();
     }
 
+    /** Tabela Price: prestações iguais; a última absorve a diferença de centavos e zera o saldo. */
+    public List<LinhaAmortizacao> tabelaPrice(BigDecimal principal, BigDecimal taxaMensal, int n) {
+        if (n < 1) throw new RegraNegocioException("Número de parcelas inválido");
+
+        BigDecimal prestacao;
+        if (taxaMensal.signum() == 0) {
+            prestacao = principal.divide(BigDecimal.valueOf(n), 2, RoundingMode.HALF_UP);
+        } else {
+            // PMT = PV * [i(1+i)^n] / [(1+i)^n - 1]
+            BigDecimal fator = BigDecimal.ONE.add(taxaMensal).pow(n, MC);
+            prestacao = principal.multiply(taxaMensal.multiply(fator, MC), MC)
+                    .divide(fator.subtract(BigDecimal.ONE), MC)
+                    .setScale(2, RoundingMode.HALF_UP);
+        }
+
+        List<LinhaAmortizacao> linhas = new ArrayList<>();
+        BigDecimal saldo = principal;
+        for (int k = 1; k <= n; k++) {
+            BigDecimal juros = saldo.multiply(taxaMensal).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal amortizacao = prestacao.subtract(juros);
+            BigDecimal valorParcela = prestacao;
+            if (k == n) {                       // última parcela absorve a diferença de centavos
+                amortizacao = saldo;
+                valorParcela = saldo.add(juros);
+            }
+            saldo = saldo.subtract(amortizacao);
+            linhas.add(new LinhaAmortizacao(k, valorParcela, juros, amortizacao, saldo));
+        }
+        return linhas;
+    }
+
+    /** Simulação do parcelamento (RF11), aplicando a carência de juros configurada. */
     public SimulacaoDTO simular(BigDecimal valor, int qtdParcelas) {
         if (valor == null || valor.signum() <= 0) {
             throw new RegraNegocioException("Valor deve ser maior que zero.");
@@ -38,58 +69,37 @@ public class CalculadoraFinanceira {
         if (qtdParcelas < 1 || qtdParcelas > cfg.maxParcelas()) {
             throw new RegraNegocioException("Quantidade de parcelas deve estar entre 1 e " + cfg.maxParcelas() + ".");
         }
-        BigDecimal pv = valor.setScale(2, RoundingMode.HALF_EVEN);
-        // à vista não tem juros
-        BigDecimal i = qtdParcelas == 1 ? BigDecimal.ZERO : cfg.taxaJurosMensal();
-
-        BigDecimal pmt;
-        if (i.signum() == 0) {
-            pmt = pv.divide(BigDecimal.valueOf(qtdParcelas), 2, RoundingMode.HALF_EVEN);
-        } else {
-            BigDecimal fator = BigDecimal.ONE.add(i).pow(-qtdParcelas, MC);
-            pmt = pv.multiply(i, MC).divide(BigDecimal.ONE.subtract(fator), MC).setScale(2, RoundingMode.HALF_EVEN);
-        }
-
-        List<SimulacaoDTO.Linha> linhas = new ArrayList<>();
-        BigDecimal saldo = pv;
-        BigDecimal total = BigDecimal.ZERO;
-        for (int k = 1; k <= qtdParcelas; k++) {
-            BigDecimal juros = saldo.multiply(i).setScale(2, RoundingMode.HALF_EVEN);
-            BigDecimal amortizacao;
-            BigDecimal parcela;
-            if (k == qtdParcelas) {
-                // última parcela absorve as diferenças de arredondamento e zera o saldo
-                amortizacao = saldo;
-                parcela = saldo.add(juros);
-            } else {
-                parcela = pmt;
-                amortizacao = pmt.subtract(juros);
-            }
-            saldo = saldo.subtract(amortizacao);
-            total = total.add(parcela);
-            linhas.add(new SimulacaoDTO.Linha(k, parcela, juros, amortizacao, saldo));
-        }
-        return new SimulacaoDTO(pv, qtdParcelas, i, pmt, total, total.subtract(pv), linhas);
+        BigDecimal principal = valor.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal taxa = taxaPara(qtdParcelas);
+        List<LinhaAmortizacao> linhas = tabelaPrice(principal, taxa, qtdParcelas);
+        BigDecimal total = linhas.stream().map(LinhaAmortizacao::valorParcela).reduce(BigDecimal.ZERO, BigDecimal::add);
+        return new SimulacaoDTO(principal, qtdParcelas, taxa, taxaEfetivaAnual(taxa),
+                linhas.get(0).valorParcela(), total, total.subtract(principal), linhas);
     }
 
-    /** Multa (percentual fixo) + mora diária proporcional aos dias em atraso. */
-    public BigDecimal calcularEncargosAtraso(BigDecimal valorParcela, long diasAtraso) {
+    /** Taxa mensal aplicada a n parcelas: zero dentro da carência de juros. */
+    public BigDecimal taxaPara(int qtdParcelas) {
+        return qtdParcelas <= cfg.parcelasSemJuros() ? BigDecimal.ZERO : cfg.taxaJurosMensal();
+    }
+
+    /** Taxa efetiva anual equivalente: (1 + i)^12 − 1, em fração com 4 casas (0,2682 = 26,82%). */
+    public BigDecimal taxaEfetivaAnual(BigDecimal taxaMensal) {
+        return BigDecimal.ONE.add(taxaMensal).pow(12, MC).subtract(BigDecimal.ONE).setScale(4, RoundingMode.HALF_UP);
+    }
+
+    /** Multa moratória, aplicada uma única vez quando a parcela entra em atraso. */
+    public BigDecimal calcularMulta(BigDecimal valorParcela) {
+        return valorParcela.multiply(cfg.percentualMulta()).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /** Juros de mora simples, proporcionais aos dias de atraso: valor × taxa mensal × dias / 30. */
+    public BigDecimal calcularJurosMora(BigDecimal valorParcela, long diasAtraso) {
         if (diasAtraso <= 0) {
             return BigDecimal.ZERO.setScale(2);
         }
-        BigDecimal multa = valorParcela.multiply(cfg.multaPercentual());
-        BigDecimal mora = valorParcela.multiply(cfg.moraDiariaPercentual()).multiply(BigDecimal.valueOf(diasAtraso));
-        return multa.add(mora).setScale(2, RoundingMode.HALF_EVEN);
-    }
-
-    /** @return [comissão, líquido] */
-    public BigDecimal[] calcularRepasse(BigDecimal valorBruto, BigDecimal percentualComissao) {
-        BigDecimal comissao = valorBruto.multiply(percentualComissao).divide(CEM, 2, RoundingMode.HALF_EVEN);
-        return new BigDecimal[]{comissao, valorBruto.subtract(comissao)};
-    }
-
-    public int maxParcelas() {
-        return cfg.maxParcelas();
+        return valorParcela.multiply(cfg.jurosMoraMensal())
+                .multiply(BigDecimal.valueOf(diasAtraso))
+                .divide(TRINTA, 2, RoundingMode.HALF_UP);
     }
 
     public int diasPrimeiroVencimento() {

@@ -12,17 +12,19 @@ public record AulanetProperties(Jwt jwt, Financeiro financeiro) {
     }
 
     /**
-     * @param taxaJurosMensal        juros compostos ao mês aplicados no parcelamento (ex.: 0.0199 = 1,99%)
+     * @param taxaJurosMensal        juros compostos ao mês do parcelamento pela Tabela Price (ex.: 0.02 = 2%)
+     * @param parcelasSemJuros       carência de juros: até esta quantidade de parcelas não há juros (1 = só à vista)
      * @param maxParcelas            quantidade máxima de parcelas
-     * @param multaPercentual        multa única por atraso (ex.: 0.02 = 2%)
-     * @param moraDiariaPercentual   juros de mora ao dia sobre a parcela em atraso (ex.: 0.00033 = 0,033%)
+     * @param percentualMulta        multa moratória única, limitada a 2% pelo art. 52, § 1º, do CDC (ex.: 0.02)
+     * @param jurosMoraMensal        juros de mora ao mês, cobrados pro rata die (ex.: 0.01 = 1% a.m.)
      * @param comissaoPadrao         comissão da plataforma sugerida ao professor (%)
      * @param diasPrimeiroVencimento dias entre a conclusão da aula e o 1º vencimento
      */
     public record Financeiro(BigDecimal taxaJurosMensal,
+                             int parcelasSemJuros,
                              int maxParcelas,
-                             BigDecimal multaPercentual,
-                             BigDecimal moraDiariaPercentual,
+                             BigDecimal percentualMulta,
+                             BigDecimal jurosMoraMensal,
                              BigDecimal comissaoPadrao,
                              int diasPrimeiroVencimento) {
     }
