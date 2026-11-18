@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Perfil do professor — Aula.net</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎓</text></svg>">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="js/api.js"></script>
+</head>
+<body>
+<nav class="nav" id="nav"></nav>
+<main class="container">
+    <p class="pequeno" style="margin:0 0 12px"><a href="index.html" onclick="if (document.referrer.includes('index.html')) { history.back(); return false; }">‹ Voltar para a busca</a></p>
+    <div class="perfil-capa"></div>
+    <section class="perfil-cabecalho" id="cabecalho"><div class="vazio">Carregando...</div></section>
+
+    <div class="perfil-corpo">
+        <div class="grid">
+            <section class="card" id="secSobre"></section>
+            <section class="card oculto" id="secCurriculo"></section>
+            <section class="card"><h2 class="secao-titulo">Serviços e preços</h2><div id="servicos"></div></section>
+            <section class="card"><h2 class="secao-titulo" id="tituloAval">Avaliações dos alunos</h2><div id="avaliacoes"></div></section>
+        </div>
+
+        <aside class="card fixo" id="boxAgendar">
+            <h2 class="secao-titulo" style="margin-bottom:4px">Agendar uma aula</h2>
+            <p class="pequeno suave" style="margin:0 0 12px">O professor confirma ou recusa. Você só paga depois que a aula acontece.</p>
+            <form id="formAgendar">
+                <div class="campo"><label for="oferta">1. Serviço</label><select id="oferta" required></select></div>
+                <div class="linha">
+                    <div class="campo"><label for="data">2. Data</label><input id="data" type="date" required></div>
+                    <div class="campo"><label for="hora">3. Horário</label><input id="hora" type="time" required value="14:00"></div>
+                </div>
+                <div class="campo"><label for="duracao">4. Duração</label>
+                    <select id="duracao"><option value="60">1 hora</option><option value="90">1h30</option><option value="120">2 horas</option><option value="180">3 horas</option></select></div>
+                <div class="entre" style="margin-bottom:12px"><span class="suave">Valor estimado</span><strong id="estimado" class="preco">-</strong></div>
+                <button class="btn btn-bloco btn-lg" type="submit">5. Solicitar agendamento</button>
+            </form>
+        </aside>
+    </div>
+</main>
+<footer>Aula.net — TCC Análise e Desenvolvimento de Sistemas · UEMA</footer>
+
+<script>
+    const params = new URLSearchParams(location.search);
+    const professorId = params.get('id');
+    const $ = id => document.getElementById(id);
+    let ofertas = [];
+    const u = Api.usuario();
+    const podeAgendar = !u || u.papel === 'ALUNO';   // visitante vê o formulário e é levado ao login ao enviar
+
+    // ícones nos títulos fixos
+    $('servicos').previousElementSibling.insertAdjacentHTML('afterbegin', icone('carteira'));
+    $('tituloAval').insertAdjacentHTML('afterbegin', icone('estrela'));
+
+    const linhas = txt => (txt || '').split('\n').map(l => l.trim()).filter(Boolean);
+
+    function estimar() {
+        if (!podeAgendar) return;
+        const o = ofertas.find(x => x.id == $('oferta').value);
+        $('estimado').textContent = o ? fmt.moeda(o.valorHora * +$('duracao').value / 60) : '-';
+    }
+
+    function distribuicao(avaliacoes) {
+        if (!avaliacoes.length) return '';
+        return '<div class="grid" style="gap:6px;margin-bottom:12px">' + [5, 4, 3, 2, 1].map(n => {
+            const q = avaliacoes.filter(a => a.nota === n).length;
+            return `<div class="dist-nota"><span>${n} ★</span><div class="dist-barra"><span style="width:${q / avaliacoes.length * 100}%"></span></div><span>${q}</span></div>`;
+        }).join('') + '</div>';
+    }
+
+    async function carregar() {
+        let p;
+        try { p = await Api.get('/api/professores/' + professorId); }
+        catch (e) { $('cabecalho').innerHTML = '<div class="vazio">Professor não encontrado. <a href="index.html">Voltar para a busca</a></div>'; return; }
+        ofertas = p.ofertas;
+        document.title = p.nome + ' — Aula.net';
+        const precos = ofertas.map(o => +o.valorHora);
+        $('cabecalho').innerHTML = `
+            <div class="perfil-identidade">
+                ${avatar(p.nome, p.fotoUrl, 'lg')}
+                <div style="flex:1;min-width:240px;padding-bottom:6px">
+                    <h1>${esc(p.nome)}</h1>
+                    <div class="metricas">
+                        ${p.cidade ? `<span>${icone('local')} ${esc(p.cidade)}${p.uf ? ' – ' + esc(p.uf) : ''}</span>` : ''}
+                        <span>${fmt.estrelas(p.mediaAvaliacao)} ${p.totalAvaliacoes ? `<span>(${p.totalAvaliacoes} avaliações)</span>` : ''}</span>
+                        ${p.aulasConcluidas ? `<span>${icone('aula')} ${p.aulasConcluidas} aulas dadas</span>` : ''}
+                    </div>
+                </div>
+                ${precos.length ? `<div class="preco" style="padding-bottom:6px"><small>a partir de </small>${fmt.moeda(Math.min(...precos))}<small> /hora</small></div>` : ''}
+            </div>
+            <div class="chips mt">${[...p.disciplinas].map(d => `<span class="chip">${esc(d)}</span>`).join('')} ${[...p.modalidades].map(selo).join('')}</div>`;
+
+        $('secSobre').innerHTML = `<h2 class="secao-titulo">${icone('sobre')} Sobre ${esc(p.nome.split(' ')[0])}</h2>
+            <p class="texto-longo">${esc(p.bio || 'Este professor ainda não escreveu uma apresentação.')}</p>`;
+
+        const formacao = linhas(p.formacao), experiencia = linhas(p.experiencia);
+        if (formacao.length || experiencia.length || p.linkCurriculo) {
+            $('secCurriculo').classList.remove('oculto');
+            $('secCurriculo').innerHTML = `
+                ${formacao.length ? `<h2 class="secao-titulo">${icone('formacao')} Formação</h2><ul class="lista-cv">${formacao.map(l => `<li>${esc(l)}</li>`).join('')}</ul>` : ''}
+                ${experiencia.length ? `<h2 class="secao-titulo mt">${icone('experiencia')} Experiência</h2><ul class="lista-cv">${experiencia.map(l => `<li>${esc(l)}</li>`).join('')}</ul>` : ''}
+                ${p.linkCurriculo ? `<a class="btn btn-sec btn-sm mt" href="${esc(p.linkCurriculo)}" target="_blank" rel="noopener noreferrer">${icone('link')} Ver currículo completo</a>` : ''}`;
+        }
+
+        $('servicos').innerHTML = ofertas.length ? ofertas.map(o => `
+            <div class="servico"><div><strong>${esc(o.disciplina)}</strong> ${selo(o.modalidade)}</div>
+                <div class="entre"><span class="preco" style="font-size:1.1rem">${fmt.moeda(o.valorHora)}<small> /hora</small></span>
+                ${podeAgendar ? `<button class="btn btn-sec btn-sm" data-oferta="${o.id}">Escolher</button>` : ''}</div></div>`).join('')
+            : '<div class="vazio">Nenhum serviço cadastrado.</div>';
+
+        if (podeAgendar) $('oferta').innerHTML = ofertas.map(o => `<option value="${o.id}">${esc(o.disciplina)} · ${fmt.rotulo(o.modalidade)} · ${fmt.moeda(o.valorHora)}/h</option>`).join('');
+        if (podeAgendar && params.get('oferta')) $('oferta').value = params.get('oferta');
+        estimar();
+
+        $('avaliacoes').innerHTML = p.avaliacoes.length ? distribuicao(p.avaliacoes) + p.avaliacoes.map(a => `
+            <div class="avaliacao">${avatar(a.alunoNome, null, 'sm')}
+                <div><strong>${esc(a.alunoNome)}</strong> <span class="estrelas">${'★'.repeat(a.nota)}${'☆'.repeat(5 - a.nota)}</span>
+                <div class="suave">${esc(a.comentario || '')}</div></div></div>`).join('')
+            : '<div class="vazio">Ainda sem avaliações. As notas aparecem depois das primeiras aulas concluídas.</div>';
+    }
+
+    // "Escolher" na lista de serviços preenche o agendamento
+    $('servicos').addEventListener('click', e => {
+        const b = e.target.closest('[data-oferta]');
+        if (!b) return;
+        $('oferta').value = b.dataset.oferta; estimar();
+        $('boxAgendar').scrollIntoView({ behavior: 'smooth', block: 'center' }); $('data').focus();
+    });
+
+    if (!podeAgendar) {
+        $('boxAgendar').innerHTML = `<h2 class="secao-titulo">Agendar uma aula</h2><div class="info-box">${
+            u.id == professorId ? 'Este é o seu perfil público, como os alunos o veem. <a href="perfil.html">Editar perfil</a>'
+                : 'Apenas alunos podem solicitar aulas.'}</div>`;
+    } else {
+        const amanha = new Date(); amanha.setDate(amanha.getDate() + 1);
+        $('data').min = fmt.iso(new Date());
+        $('data').value = fmt.iso(amanha);
+        ['oferta', 'duracao'].forEach(id => $(id).addEventListener('change', estimar));
+    }
+
+    if (podeAgendar) $('formAgendar').addEventListener('submit', async ev => {
+        ev.preventDefault();
+        if (!Api.usuario()) { location.href = 'login.html?voltar=' + encodeURIComponent('professor.html' + location.search); return; }
+        await acao(() => Api.post('/api/agendamentos', {
+            ofertaId: +$('oferta').value, dataAula: $('data').value,
+            horarioInicio: $('hora').value, duracaoMinutos: +$('duracao').value
+        }), 'Solicitação enviada! Acompanhe em "Meu painel".');
+        setTimeout(() => location.href = 'aluno.html', 1200);
+    });
+
+    carregar();
+</script>
+</body>
+</html>

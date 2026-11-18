@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Aula.net — Encontre seu professor particular</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎓</text></svg>">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="js/api.js"></script>
+</head>
+<body>
+<nav class="nav" id="nav"></nav>
+<main class="container">
+    <section class="hero">
+        <div>
+            <h1>Aulas particulares, direto com o professor.</h1>
+            <p>Encontre professores autônomos por disciplina, cidade e preço. Agende, pague à vista ou parcelado e avalie suas aulas, tudo em um só lugar.</p>
+            <form class="busca-principal" id="formBusca" role="search">
+                <input id="termo" placeholder="O que você quer aprender? Ex.: Matemática, Inglês, nome do professor" aria-label="Buscar">
+                <button class="btn btn-lg" type="submit">Buscar</button>
+            </form>
+            <div class="atalhos" id="atalhos"></div>
+            <div class="hero-numeros" id="numeros"></div>
+        </div>
+        <svg class="hero-ilustracao" viewBox="0 0 320 260" aria-hidden="true">
+            <rect x="20" y="30" width="230" height="150" rx="14" fill="#fff" opacity=".96"/>
+            <rect x="34" y="44" width="98" height="78" rx="8" fill="#dbe5ff"/>
+            <circle cx="83" cy="74" r="16" fill="#3a6cf4"/><path d="M56 118c4-16 15-24 27-24s23 8 27 24" fill="#3a6cf4"/>
+            <rect x="140" y="44" width="96" height="78" rx="8" fill="#d6f5ec"/>
+            <circle cx="188" cy="74" r="16" fill="#18b08c"/><path d="M161 118c4-16 15-24 27-24s23 8 27 24" fill="#18b08c"/>
+            <rect x="34" y="132" width="140" height="10" rx="5" fill="#e2e6ef"/><rect x="34" y="150" width="96" height="10" rx="5" fill="#e2e6ef"/>
+            <rect x="190" y="132" width="46" height="28" rx="8" fill="#2850d8"/>
+            <rect x="120" y="180" width="30" height="22" fill="#fff" opacity=".9"/><rect x="85" y="200" width="100" height="10" rx="5" fill="#fff" opacity=".9"/>
+            <g transform="translate(232 150)"><rect width="70" height="88" rx="10" fill="#ff8a3d"/><rect x="10" y="14" width="50" height="6" rx="3" fill="#fff"/><rect x="10" y="28" width="38" height="6" rx="3" fill="#fff" opacity=".8"/><rect x="10" y="42" width="44" height="6" rx="3" fill="#fff" opacity=".8"/><path d="m14 64 8 8 16-18" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g>
+            <path d="m282 40 5 10 11 2-8 8 2 11-10-5-10 5 2-11-8-8 11-2z" fill="#ffd166"/>
+        </svg>
+    </section>
+
+    <section class="card" aria-label="Filtros">
+        <div class="filtros">
+            <div><label for="disciplina">Disciplina</label><select id="disciplina"><option value="">Todas</option></select></div>
+            <div class="largo"><label>Modalidade</label>
+                <div class="segmentado" id="modalidade">
+                    <button type="button" data-v="" class="ativo">Todas</button><button type="button" data-v="ONLINE">Online</button><button type="button" data-v="PRESENCIAL">Presencial</button>
+                </div></div>
+            <div><label for="cidade">Cidade</label><input id="cidade" placeholder="Ex.: São Luís"></div>
+            <div><label for="precoMax">Até (R$/hora)</label>
+                <select id="precoMax"><option value="">Qualquer valor</option><option>60</option><option>80</option><option>100</option><option>150</option></select></div>
+            <div><label for="notaMin">Avaliação</label>
+                <select id="notaMin"><option value="">Qualquer</option><option value="4">4 estrelas ou mais</option><option value="4.5">4,5 ou mais</option></select></div>
+            <div><label for="ordenar">Ordenar por</label>
+                <select id="ordenar"><option value="relevancia">Mais relevantes</option><option value="maior_nota">Melhor avaliados</option><option value="menor_preco">Menor preço</option><option value="mais_aulas">Mais aulas dadas</option></select></div>
+        </div>
+    </section>
+
+    <div class="entre mt-2">
+        <h2 style="margin:0" id="tituloResultados">Professores disponíveis</h2>
+        <span class="suave"><span id="contador"></span> <a href="#" id="limpar" class="oculto">limpar filtros</a></span>
+    </div>
+    <section id="resultados" class="grid grid-3 mt" aria-live="polite"></section>
+</main>
+<footer>Aula.net — TCC Análise e Desenvolvimento de Sistemas · UEMA</footer>
+
+<script>
+    const FILTROS = ['termo', 'disciplina', 'cidade', 'precoMax', 'notaMin', 'ordenar'];
+    const $ = id => document.getElementById(id);
+    let disciplinas = [];
+    let modalidade = '';
+
+    function cartao(p) {
+        const local = p.cidade ? `<span class="prof-local">${icone('local')} ${esc(p.cidade)}${p.uf ? ' – ' + esc(p.uf) : ''}</span>` : '';
+        const preco = p.precoMin == p.precoMax ? fmt.moeda(p.precoMin) : `${fmt.moeda(p.precoMin)}`;
+        return `<article class="card prof-card">
+            <div class="prof-topo">
+                ${avatar(p.nome, p.fotoUrl, 'md')}
+                <div><h3>${esc(p.nome)}</h3>${local}
+                    <div class="metricas">${p.mediaAvaliacao != null
+                        ? `<span>${fmt.estrelas(p.mediaAvaliacao)} <span class="suave">(${p.totalAvaliacoes})</span></span>`
+                        : '<span class="chip">Novo na plataforma</span>'}
+                        ${p.aulasConcluidas ? `<span>${icone('aula')} ${p.aulasConcluidas} aula${p.aulasConcluidas > 1 ? 's' : ''}</span>` : ''}</div>
+                </div>
+            </div>
+            ${p.bioResumo ? `<p class="prof-bio">${esc(p.bioResumo)}</p>` : ''}
+            <div class="chips">${p.disciplinas.map(d => `<span class="chip">${esc(d)}</span>`).join('')}${p.modalidades.map(selo).join('')}</div>
+            <div class="prof-rodape">
+                <div class="preco"><small>${p.precoMin == p.precoMax ? '' : 'a partir de '}</small>${preco} <small>/hora</small></div>
+                <a class="btn" href="professor.html?id=${p.id}">Ver perfil</a>
+            </div>
+        </article>`;
+    }
+
+    function lerFiltros() {
+        const q = new URLSearchParams();
+        FILTROS.forEach(f => { const v = $(f).value.trim(); if (v && !(f === 'ordenar' && v === 'relevancia')) q.set(f, v); });
+        if (modalidade) q.set('modalidade', modalidade);
+        return q;
+    }
+
+    async function buscar() {
+        const q = lerFiltros();
+        history.replaceState(null, '', q.toString() ? '?' + q : location.pathname);   // a busca fica no endereço
+        $('limpar').classList.toggle('oculto', !q.toString());
+        const api = new URLSearchParams();
+        if (q.get('termo')) api.set('termo', q.get('termo'));
+        if (q.get('disciplina')) api.set('disciplinaId', q.get('disciplina'));
+        ['modalidade', 'cidade', 'precoMax', 'notaMin', 'ordenar'].forEach(k => q.get(k) && api.set(k, q.get(k)));
+        const box = $('resultados');
+        box.innerHTML = '<div class="esqueleto"></div><div class="esqueleto"></div><div class="esqueleto"></div>';
+        try {
+            const profs = await Api.get('/api/professores?' + api);
+            $('contador').textContent = profs.length + (profs.length === 1 ? ' professor' : ' professores');
+            const disc = disciplinas.find(d => String(d.id) === q.get('disciplina'));
+            $('tituloResultados').textContent = q.get('termo') ? `Resultados para “${q.get('termo')}”`
+                : disc ? `Professores de ${disc.nome}` : 'Professores disponíveis';
+            box.innerHTML = profs.length ? profs.map(cartao).join('') : `<div class="card vazio" style="grid-column:1/-1">
+                <svg viewBox="0 0 120 90" aria-hidden="true"><circle cx="52" cy="40" r="26" fill="none" stroke="#c9d5fb" stroke-width="8"/><path d="m72 60 22 22" stroke="#c9d5fb" stroke-width="10" stroke-linecap="round"/></svg>
+                <strong>Nenhum professor encontrado.</strong><br>Tente outra disciplina, outra cidade ou <a href="#" onclick="limpar();return false">limpe os filtros</a>.</div>`;
+        } catch (e) { box.innerHTML = ''; toast(e.message, 'erro'); }
+    }
+
+    let espera;
+    const buscarDepois = () => { clearTimeout(espera); espera = setTimeout(buscar, 350); };
+
+    function limpar() {
+        FILTROS.forEach(f => $(f).value = f === 'ordenar' ? 'relevancia' : '');
+        definirModalidade('');
+        buscar();
+    }
+    function definirModalidade(v) {
+        modalidade = v;
+        document.querySelectorAll('#modalidade button').forEach(b => b.classList.toggle('ativo', b.dataset.v === v));
+    }
+
+    async function iniciar() {
+        disciplinas = await Api.get('/api/disciplinas');
+        $('disciplina').insertAdjacentHTML('beforeend', disciplinas.map(d => `<option value="${d.id}">${esc(d.nome)}</option>`).join(''));
+        $('atalhos').addEventListener('click', e => {
+            if (!e.target.dataset.id) return;
+            $('termo').value = ''; $('disciplina').value = e.target.dataset.id; buscar();
+            $('tituloResultados').scrollIntoView({ behavior: 'smooth' });
+        });
+        // restaura a busca do endereço (link compartilhado ou botão voltar)
+        const q = new URLSearchParams(location.search);
+        FILTROS.forEach(f => q.get(f) && ($(f).value = q.get(f)));
+        definirModalidade(q.get('modalidade') || '');
+        const todos = await Api.get('/api/professores');
+        const cidades = new Set(todos.map(p => p.cidade).filter(Boolean));
+        // atalhos: as disciplinas com mais professores
+        const conta = {};
+        todos.forEach(p => p.disciplinas.forEach(d => conta[d] = (conta[d] || 0) + 1));
+        $('atalhos').innerHTML = disciplinas.filter(d => conta[d.nome]).sort((a, b) => conta[b.nome] - conta[a.nome] || a.nome.localeCompare(b.nome))
+            .slice(0, 6).map(d => `<button type="button" class="atalho" data-id="${d.id}">${esc(d.nome)}</button>`).join('');
+        $('numeros').innerHTML = `<span><strong>${todos.length}</strong> professores</span><span><strong>${disciplinas.length}</strong> disciplinas</span><span><strong>${cidades.size}</strong> cidades</span>`;
+        buscar();
+    }
+
+    $('formBusca').addEventListener('submit', e => { e.preventDefault(); buscar(); $('tituloResultados').scrollIntoView({ behavior: 'smooth' }); });
+    ['disciplina', 'precoMax', 'notaMin', 'ordenar'].forEach(f => $(f).addEventListener('change', buscar));
+    $('cidade').addEventListener('input', buscarDepois);
+    $('modalidade').addEventListener('click', e => { if (e.target.dataset.v !== undefined) { definirModalidade(e.target.dataset.v); buscar(); } });
+    $('limpar').addEventListener('click', e => { e.preventDefault(); limpar(); });
+    iniciar();
+</script>
+</body>
+</html>
