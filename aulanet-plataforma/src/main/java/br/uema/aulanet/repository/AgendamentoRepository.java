@@ -42,4 +42,8 @@ public interface AgendamentoRepository extends JpaRepository<Agendamento, Intege
                                             @Param("status") Collection<StatusAgendamento> status);
 
     long countByStatus(StatusAgendamento status);
+
+    /** [id do professor, quantidade de aulas concluídas]. */
+    @Query("select a.oferta.professor.id, count(a) from Agendamento a where a.status = :status group by a.oferta.professor.id")
+    List<Object[]> contarPorProfessor(@Param("status") StatusAgendamento status);
 }

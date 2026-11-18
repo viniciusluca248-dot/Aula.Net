@@ -7,6 +7,7 @@ import br.uema.aulanet.dto.UsuarioDTO;
 import br.uema.aulanet.exception.RegraNegocioException;
 import br.uema.aulanet.model.Papel;
 import br.uema.aulanet.model.Usuario;
+import br.uema.aulanet.repository.PerfilUsuarioRepository;
 import br.uema.aulanet.repository.UsuarioRepository;
 import br.uema.aulanet.security.JwtService;
 import br.uema.aulanet.security.UsuarioLogado;
@@ -23,9 +24,12 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
+    private final PerfilUsuarioRepository perfilRepository;
 
     public AuthService(UsuarioRepository usuarioRepository, PasswordEncoder passwordEncoder,
-                       AuthenticationManager authenticationManager, JwtService jwtService) {
+                       AuthenticationManager authenticationManager, JwtService jwtService,
+                       PerfilUsuarioRepository perfilRepository) {
+        this.perfilRepository = perfilRepository;
         this.usuarioRepository = usuarioRepository;
         this.passwordEncoder = passwordEncoder;
         this.authenticationManager = authenticationManager;
@@ -66,7 +70,8 @@ public class AuthService {
     private AuthResponse gerarResposta(UsuarioLogado logado) {
         String token = jwtService.gerarToken(logado);
         Usuario u = usuarioRepository.findById(logado.getId()).orElseThrow();
-        return new AuthResponse(token, jwtService.expiracao(token), UsuarioDTO.de(u));
+        return new AuthResponse(token, jwtService.expiracao(token), UsuarioDTO.de(u, perfilRepository.findById(u.getId())
+                .map(PerfilService::fotoUrl).orElse(null)));
     }
 
     static String somenteDigitos(String cpf) {

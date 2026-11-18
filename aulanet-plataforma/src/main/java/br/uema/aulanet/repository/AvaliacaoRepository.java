@@ -18,4 +18,8 @@ public interface AvaliacaoRepository extends JpaRepository<Avaliacao, Integer> {
     Double mediaDoProfessor(@Param("professorId") Integer professorId);
 
     long countByProfessorId(Integer professorId);
+
+    /** [id do professor, média das notas, quantidade de avaliações] de todos os professores avaliados. */
+    @Query("select a.professor.id, avg(a.nota), count(a) from Avaliacao a group by a.professor.id")
+    List<Object[]> estatisticasPorProfessor();
 }

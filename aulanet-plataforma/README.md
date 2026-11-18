@@ -45,7 +45,7 @@ Sem IntelliJ: `./mvnw spring-boot:run` (Linux/Mac) ou `mvnw.cmd spring-boot:run`
 ### Testes
 
 Clique com o botão direito em `src/test/java` → **Run 'All Tests'**, ou `./mvnw test`.
-São 34 testes, em cinco classes:
+São 43 testes. Além de `PerfilServiceTest` e `PerfilEBuscaIntegrationTest` (perfil, currículo, foto e busca),
 `AgendamentoTest` (transições de status na entidade), `CalculadoraFinanceiraTest` (valores de referência da
 monografia: Tabela 1, taxa efetiva anual, carência, multa e mora), `FinanceiroServiceTest` (pagamento, encargos,
 repasse), `AgendamentoServiceTest` (fluxo e conflitos de horário) e `FluxoCompletoIntegrationTest` (do cadastro
@@ -85,8 +85,23 @@ aulanet-plataforma/
 ```
 
 As tabelas seguem o modelo do MySQL Workbench (`usuario`, `disciplina`, `oferta_aula`, `agendamento`,
-`avaliacao`, `pagamento`, `parcela`, `repasse`). Foi acrescentada a coluna `usuario.bio` para a apresentação
-do professor no perfil público.
+`avaliacao`, `pagamento`, `parcela`, `repasse`). Foram acrescentadas a coluna `usuario.bio` e duas tabelas
+1 : 1 com `usuario`, previstas como trabalho futuro na seção 5.2 da monografia:
+
+- `perfil_usuario`: cidade, UF, formação, experiência, link do currículo (Lattes/LinkedIn) e a versão da foto;
+- `foto_usuario`: a foto de perfil (JPEG, PNG ou WebP, até 2 MB), separada para não pesar nas listagens.
+
+### Perfil e busca
+
+- **Meu perfil** (`perfil.html`): foto (recortada em quadrado e reduzida a 512 px no navegador antes do envio),
+  dados de contato, apresentação e, para o professor, formação, experiência e link do currículo. Um indicador
+  mostra quanto do perfil está completo e o que falta; o painel do professor lembra quando está incompleto.
+- **Busca** (`index.html`): um cartão por professor, com foto, cidade, nota, aulas dadas, disciplinas e preço a
+  partir de. Busca por nome ou disciplina sem diferenciar acentos, filtros de modalidade, cidade, preço e nota,
+  e ordenação. Os filtros ficam no endereço da página, então o link da busca pode ser compartilhado.
+- **Perfil público** (`professor.html`): capa, foto, apresentação, formação e experiência em linha do tempo,
+  serviços, distribuição das notas e o cartão de agendamento ao lado.
+- A foto é validada pelos primeiros bytes do arquivo (não pelo nome), e o link do currículo só aceita http/https.
 
 ---
 
@@ -140,7 +155,8 @@ do professor no perfil público.
 | Método | Rota | Acesso |
 |--------|------|--------|
 | POST | `/api/auth/cadastro`, `/api/auth/login` | público |
-| GET | `/api/disciplinas`, `/api/ofertas`, `/api/professores/{id}` | público |
+| GET | `/api/disciplinas`, `/api/ofertas`, `/api/professores`, `/api/professores/{id}`, `/api/usuarios/{id}/foto` | público |
+| PUT/DELETE | `/api/usuarios/me/foto` (multipart, campo `foto`) | autenticado |
 | GET/PUT | `/api/usuarios/me` | autenticado |
 | GET/POST/PUT/DELETE | `/api/ofertas/minhas`, `/api/ofertas/{id}` | PROFESSOR |
 | POST | `/api/agendamentos` · GET `/api/agendamentos/meus` · PATCH `/{id}/cancelar` | ALUNO |

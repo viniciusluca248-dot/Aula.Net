@@ -10,8 +10,18 @@
 </head>
 <body>
 <nav class="nav" id="nav"></nav>
-<main class="container estreito">
-    <div class="card mt-2">
+<main class="acesso">
+    <aside class="acesso-lado">
+        <h2>Aulas particulares, direto com o professor</h2>
+        <ul>
+            <li><span class="icone-bola">✓</span> Professores com foto, currículo e avaliações reais</li>
+            <li><span class="icone-bola">✓</span> Agenda organizada: solicitar, confirmar e concluir</li>
+            <li><span class="icone-bola">✓</span> Pagamento à vista ou parcelado, com valores claros antes de contratar</li>
+            <li><span class="icone-bola">✓</span> O professor acompanha quanto recebeu e quanto tem a receber</li>
+        </ul>
+    </aside>
+    <section class="acesso-form"><div>
+    <div class="card">
         <h2 style="margin-top:0">Criar conta</h2>
         <form id="form">
             <div class="campo"><label>Eu quero</label>
@@ -29,6 +39,7 @@
         </form>
         <p class="centro pequeno mt">Já tem conta? <a href="login.html">Entrar</a></p>
     </div>
+    </div></section>
 </main>
 <script>
     const papel = document.getElementById('papel');
@@ -42,7 +53,7 @@
                 senha: document.getElementById('senha').value, papel: papel.value, bio: v('bio') || null
             });
             Api.salvarSessao(r);
-            location.href = Api.paginaInicial(r.usuario.papel);
+            location.href = r.usuario.papel === 'PROFESSOR' ? 'perfil.html?novo=1' : Api.paginaInicial(r.usuario.papel);
         } catch (e) { toast(e.message, 'erro'); }
     });
 </script>

@@ -1,7 +1,6 @@
 package br.uema.aulanet.service;
 
 import br.uema.aulanet.dto.CadastroRequest;
-import br.uema.aulanet.dto.PerfilRequest;
 import br.uema.aulanet.dto.UsuarioDTO;
 import br.uema.aulanet.exception.NaoEncontradoException;
 import br.uema.aulanet.model.Papel;
@@ -22,20 +21,6 @@ public class UsuarioService {
     public UsuarioService(UsuarioRepository usuarioRepository, AuthService authService) {
         this.usuarioRepository = usuarioRepository;
         this.authService = authService;
-    }
-
-    @Transactional(readOnly = true)
-    public UsuarioDTO buscar(Integer id) {
-        return UsuarioDTO.de(obter(id));
-    }
-
-    @Transactional
-    public UsuarioDTO atualizarPerfil(Integer id, PerfilRequest req) {
-        Usuario u = obter(id);
-        u.setNome(req.nome().trim());
-        u.setTelefone(req.telefone());
-        u.setBio(req.bio());
-        return UsuarioDTO.de(u);
     }
 
     @Transactional(readOnly = true)

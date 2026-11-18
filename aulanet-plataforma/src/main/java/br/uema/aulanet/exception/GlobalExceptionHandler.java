@@ -45,6 +45,17 @@ public class GlobalExceptionHandler {
         return erro(HttpStatus.BAD_REQUEST, msg);
     }
 
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<Map<String, Object>> arquivoGrande(Exception e) {
+        return erro(HttpStatus.BAD_REQUEST, "A foto deve ter no máximo 2 MB.");
+    }
+
+    @ExceptionHandler({org.springframework.web.multipart.support.MissingServletRequestPartException.class,
+            org.springframework.web.multipart.MultipartException.class})
+    public ResponseEntity<Map<String, Object>> semArquivo(Exception e) {
+        return erro(HttpStatus.BAD_REQUEST, "Selecione uma imagem.");
+    }
+
     @ExceptionHandler({HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class})
     public ResponseEntity<Map<String, Object>> formato(Exception e) {
         return erro(HttpStatus.BAD_REQUEST, "Dados em formato inválido.");

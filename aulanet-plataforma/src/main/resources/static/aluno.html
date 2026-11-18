@@ -11,25 +11,17 @@
 <body>
 <nav class="nav" id="nav"></nav>
 <main class="container">
-    <div class="entre"><h1 style="margin:0">Olá, <span id="nome"></span></h1>
-        <a class="btn" href="index.html">+ Nova aula</a></div>
+    <div class="entre">
+        <div style="display:flex;gap:14px;align-items:center"><span id="fotoAluno"></span><h1 style="margin:0">Olá, <span id="nome"></span></h1></div>
+        <div style="display:flex;gap:8px"><a class="btn btn-leve" href="perfil.html">Editar perfil</a><a class="btn" href="index.html">+ Nova aula</a></div></div>
 
     <div class="abas mt">
         <button class="aba ativa" data-alvo="pAulas">Minhas aulas</button>
         <button class="aba" data-alvo="pPagamentos">Pagamentos</button>
-        <button class="aba" data-alvo="pPerfil">Meu perfil</button>
     </div>
 
     <section id="pAulas" class="painel ativo"><div class="card tabela-wrap" id="aulas"></div></section>
     <section id="pPagamentos" class="painel"><div id="pagamentos"></div></section>
-    <section id="pPerfil" class="painel">
-        <form class="card estreito" id="formPerfil">
-            <div class="campo"><label>Nome</label><input id="pNome" required></div>
-            <div class="campo"><label>Telefone</label><input id="pTel"></div>
-            <div class="campo"><label>Sobre mim</label><textarea id="pBio" rows="3"></textarea></div>
-            <button class="btn">Salvar</button>
-        </form>
-    </section>
 </main>
 
 <!-- Modal de pagamento: seletor de parcelas com valor em tempo real -->
@@ -70,6 +62,7 @@
 <script>
     const eu = Api.exigir('ALUNO');
     document.getElementById('nome').textContent = eu ? eu.nome.split(' ')[0] : '';
+    if (eu) document.getElementById('fotoAluno').innerHTML = avatar(eu.nome, eu.fotoUrl, 'md');
     let pagamentos = [], aulas = [];
 
     async function carregarAulas() {
@@ -171,20 +164,8 @@
         carregarAulas();
     });
 
-    // ---- perfil ----
-    async function carregarPerfil() {
-        const u = await Api.get('/api/usuarios/me');
-        document.getElementById('pNome').value = u.nome;
-        document.getElementById('pTel').value = u.telefone || '';
-        document.getElementById('pBio').value = u.bio || '';
-    }
-    document.getElementById('formPerfil').addEventListener('submit', async ev => {
-        ev.preventDefault();
-        await acao(() => Api.put('/api/usuarios/me', { nome: pNome.value, telefone: pTel.value, bio: pBio.value }), 'Perfil atualizado.');
-    });
-
     if (eu) {
-        ativarAbas(alvo => ({ pAulas: carregarAulas, pPagamentos: carregarPagamentos, pPerfil: carregarPerfil })[alvo]());
+        ativarAbas(alvo => ({ pAulas: carregarAulas, pPagamentos: carregarPagamentos })[alvo]());
         carregarAulas();
     }
 </script>

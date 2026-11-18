@@ -11,8 +11,11 @@
 <body>
 <nav class="nav" id="nav"></nav>
 <main class="container">
-    <div class="entre"><h1 style="margin:0">Painel do professor</h1>
-        <a class="btn btn-sec" id="linkPerfil" href="#">Ver meu perfil público</a></div>
+    <div class="entre">
+        <div style="display:flex;gap:14px;align-items:center"><span id="fotoProf"></span><h1 style="margin:0">Painel do professor</h1></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn btn-leve" href="perfil.html">Editar perfil</a>
+            <a class="btn btn-sec" id="linkPerfil" href="#">Ver meu perfil público</a></div></div>
+    <div class="alerta-box mt oculto" id="avisoPerfil"></div>
 
     <div class="abas mt">
         <button class="aba ativa" data-alvo="pSolic">Solicitações <span class="selo" id="qtdSolic">0</span></button>
@@ -21,7 +24,6 @@
         <button class="aba" data-alvo="pOfertas">Meus serviços</button>
         <button class="aba" data-alvo="pFin">Financeiro</button>
         <button class="aba" data-alvo="pHist">Histórico</button>
-        <button class="aba" data-alvo="pPerfil">Perfil</button>
     </div>
 
     <!-- RF08 -->
@@ -85,19 +87,21 @@
         <div class="card tabela-wrap mt" id="hAulas"></div>
     </section>
 
-    <section id="pPerfil" class="painel">
-        <form class="card estreito" id="formPerfil">
-            <div class="campo"><label>Nome</label><input id="pNome" required></div>
-            <div class="campo"><label>Telefone</label><input id="pTel"></div>
-            <div class="campo"><label>Bio (perfil público)</label><textarea id="pBio" rows="5" maxlength="1000"></textarea></div>
-            <button class="btn">Salvar</button>
-        </form>
-    </section>
 </main>
 
 <script>
     const eu = Api.exigir('PROFESSOR');
     if (eu) document.getElementById('linkPerfil').href = 'professor.html?id=' + eu.id;
+    if (eu) {
+        document.getElementById('fotoProf').innerHTML = avatar(eu.nome, eu.fotoUrl, 'md');
+        // perfil incompleto aparece menos atraente na busca: lembrete com o que falta
+        Api.get('/api/usuarios/me').then(p => {
+            if (p.completude >= 100) return;
+            const aviso = document.getElementById('avisoPerfil');
+            aviso.innerHTML = `Seu perfil está <strong>${p.completude}% completo</strong>. Falta: ${p.faltando.map(esc).join(', ')}. <a href="perfil.html">Completar agora</a>`;
+            aviso.classList.remove('oculto');
+        });
+    }
 
     const linhaAula = (a, acoes) => `<tr>
         <td>${fmt.data(a.dataAula)}</td><td>${fmt.hora(a.horarioInicio)}–${fmt.hora(a.horarioFim)}</td>
@@ -242,20 +246,10 @@
     }
     document.getElementById('formHist').addEventListener('submit', carregarHistorico);
 
-    // ---- perfil ----
-    async function carregarPerfil() {
-        const u = await Api.get('/api/usuarios/me');
-        pNome.value = u.nome; pTel.value = u.telefone || ''; pBio.value = u.bio || '';
-    }
-    document.getElementById('formPerfil').addEventListener('submit', async ev => {
-        ev.preventDefault();
-        await acao(() => Api.put('/api/usuarios/me', { nome: pNome.value, telefone: pTel.value, bio: pBio.value }), 'Perfil atualizado.');
-    });
-
     if (eu) {
         ativarAbas(alvo => ({
             pSolic: carregarSolicitacoes, pAgenda: carregarAgenda, pAulas: carregarAulas, pOfertas: carregarOfertas,
-            pFin: carregarFinanceiro, pHist: carregarHistorico, pPerfil: carregarPerfil
+            pFin: carregarFinanceiro, pHist: carregarHistorico
         })[alvo]());
         carregarSolicitacoes();
     }

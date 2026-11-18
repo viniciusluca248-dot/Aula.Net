@@ -43,7 +43,8 @@ public class SecurityConfig {
                         // autenticação
                         .requestMatchers("/api/auth/**").permitAll()
                         // busca pública de professores (RF05 / RF06)
-                        .requestMatchers(HttpMethod.GET, "/api/disciplinas", "/api/ofertas", "/api/professores/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/disciplinas", "/api/ofertas", "/api/professores/**",
+                                "/api/usuarios/*/foto").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .exceptionHandling(e -> e

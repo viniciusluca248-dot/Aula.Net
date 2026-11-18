@@ -2,6 +2,7 @@ package br.uema.aulanet.controller;
 
 import br.uema.aulanet.dto.OfertaDTO;
 import br.uema.aulanet.dto.ProfessorPerfilDTO;
+import br.uema.aulanet.dto.ProfessorResumoDTO;
 import br.uema.aulanet.model.Disciplina;
 import br.uema.aulanet.model.Modalidade;
 import br.uema.aulanet.service.DisciplinaService;
@@ -40,6 +41,19 @@ public class CatalogoController {
                                   @RequestParam(required = false) BigDecimal precoMax,
                                   @RequestParam(required = false) String termo) {
         return ofertaService.buscar(disciplinaId, modalidade, precoMin, precoMax, termo);
+    }
+
+    /** Busca com um cartão por professor (RF05). */
+    @GetMapping("/professores")
+    public List<ProfessorResumoDTO> buscarProfessores(@RequestParam(required = false) String termo,
+                                                      @RequestParam(required = false) Integer disciplinaId,
+                                                      @RequestParam(required = false) Modalidade modalidade,
+                                                      @RequestParam(required = false) BigDecimal precoMin,
+                                                      @RequestParam(required = false) BigDecimal precoMax,
+                                                      @RequestParam(required = false) String cidade,
+                                                      @RequestParam(required = false) Double notaMin,
+                                                      @RequestParam(required = false) String ordenar) {
+        return professorService.buscar(termo, disciplinaId, modalidade, precoMin, precoMax, cidade, notaMin, ordenar);
     }
 
     @GetMapping("/professores/{id}")

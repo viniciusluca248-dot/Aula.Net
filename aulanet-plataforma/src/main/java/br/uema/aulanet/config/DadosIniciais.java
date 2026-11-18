@@ -40,13 +40,16 @@ public class DadosIniciais implements CommandLineRunner {
     private final RepasseRepository repasses;
     private final FinanceiroService financeiro;
     private final PasswordEncoder encoder;
+    private final PerfilUsuarioRepository perfis;
     private final TransactionTemplate tx;
     private final Clock clock;
 
     public DadosIniciais(UsuarioRepository usuarios, DisciplinaRepository disciplinas, OfertaAulaRepository ofertas,
                          AgendamentoRepository agendamentos, AvaliacaoRepository avaliacoes,
                          PagamentoRepository pagamentos, RepasseRepository repasses, FinanceiroService financeiro,
-                         PasswordEncoder encoder, TransactionTemplate tx, Clock clock) {
+                         PasswordEncoder encoder, TransactionTemplate tx, Clock clock,
+                         PerfilUsuarioRepository perfis) {
+        this.perfis = perfis;
         this.usuarios = usuarios;
         this.disciplinas = disciplinas;
         this.ofertas = ofertas;
@@ -73,6 +76,8 @@ public class DadosIniciais implements CommandLineRunner {
                  PROFESSOR ana@aulanet.com     / 123456   (Matemática, Física)
                  PROFESSOR carlos@aulanet.com  / 123456   (Inglês)
                  PROFESSOR beatriz@aulanet.com / 123456   (Programação, Redação)
+                 PROFESSOR rafael@aulanet.com  / 123456   (Química, Biologia)
+                 PROFESSOR juliana@aulanet.com / 123456   (Português, Espanhol)
                  ALUNO     joao@aulanet.com    / 123456
                  ALUNO     maria@aulanet.com   / 123456
                 ====================================================================================
@@ -97,6 +102,24 @@ public class DadosIniciais implements CommandLineRunner {
         Usuario maria = usuario("Maria Oliveira", "maria@aulanet.com", SENHA_PADRAO, "55566677788", Papel.ALUNO,
                 "Mãe de dois filhos em homeschooling.");
 
+        Usuario rafael = usuario("Rafael Costa", "rafael@aulanet.com", SENHA_PADRAO, "66677788899", Papel.PROFESSOR,
+                "Biólogo e professor de Química e Biologia para o ENEM. Aulas com mapas mentais e muitos exercícios resolvidos.");
+        Usuario juliana = usuario("Juliana Alves", "juliana@aulanet.com", SENHA_PADRAO, "77788899900", Papel.PROFESSOR,
+                "Professora de Português e Espanhol. Atendo crianças em educação domiciliar e adultos que precisam de reforço.");
+
+        perfil(ana, "São Luís", "MA", "Licenciatura em Matemática — UEMA (2016)\nEspecialização em Ensino de Matemática — UFMA (2019)",
+                "8 anos em escolas particulares de São Luís\nMonitora de pré-vestibular desde 2018\nMais de 300 alunos aprovados no ENEM",
+                "https://lattes.cnpq.br/0000000000000001");
+        perfil(carlos, "Teresina", "PI", "Letras Inglês — UFPI (2014)\nCertificado Cambridge C1 Advanced (CAE)",
+                "Professor de cursos livres de inglês por 10 anos\nAulas de business English para empresas", null);
+        perfil(beatriz, "Timon", "MA", "Bacharelado em Ciência da Computação — UFPI (2018)",
+                "Desenvolvedora back-end Java desde 2018\nCorretora de redações do ENEM desde 2021",
+                "https://www.linkedin.com/in/exemplo-beatriz");
+        perfil(rafael, "Timon", "MA", "Licenciatura em Ciências Biológicas — UEMA (2017)",
+                "Professor de cursinho pré-vestibular há 6 anos", null);
+        perfil(juliana, "Teresina", "PI", "Licenciatura em Letras Português/Espanhol — UESPI (2015)",
+                "Professora do ensino fundamental por 7 anos\nAulas para famílias em homeschooling desde 2020", null);
+
         OfertaAula anaMatOnline = oferta(ana, d.get("Matemática"), Modalidade.ONLINE, "80.00", "10.00");
         OfertaAula anaMatPres = oferta(ana, d.get("Matemática"), Modalidade.PRESENCIAL, "100.00", "10.00");
         OfertaAula anaFis = oferta(ana, d.get("Física"), Modalidade.ONLINE, "90.00", "10.00");
@@ -104,6 +127,10 @@ public class DadosIniciais implements CommandLineRunner {
         OfertaAula carlosIngPres = oferta(carlos, d.get("Inglês"), Modalidade.PRESENCIAL, "95.00", "12.00");
         OfertaAula biaProg = oferta(beatriz, d.get("Programação"), Modalidade.ONLINE, "120.00", "15.00");
         OfertaAula biaRed = oferta(beatriz, d.get("Redação"), Modalidade.ONLINE, "60.00", "10.00");
+        oferta(rafael, d.get("Química"), Modalidade.PRESENCIAL, "75.00", "10.00");
+        oferta(rafael, d.get("Biologia"), Modalidade.ONLINE, "65.00", "10.00");
+        oferta(juliana, d.get("Português"), Modalidade.ONLINE, "55.00", "10.00");
+        oferta(juliana, d.get("Espanhol"), Modalidade.ONLINE, "60.00", "10.00");
 
         LocalDate hoje = LocalDate.now(clock);
         LocalDate segunda = hoje.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
@@ -150,6 +177,16 @@ public class DadosIniciais implements CommandLineRunner {
         Usuario u = new Usuario(nome, email, encoder.encode(senha), cpf, "(98) 9 9999-0000", papel);
         u.setBio(bio);
         return usuarios.save(u);
+    }
+
+    private void perfil(Usuario u, String cidade, String uf, String formacao, String experiencia, String link) {
+        PerfilUsuario p = new PerfilUsuario(u);
+        p.setCidade(cidade);
+        p.setUf(uf);
+        p.setFormacao(formacao);
+        p.setExperiencia(experiencia);
+        p.setLinkCurriculo(link);
+        perfis.save(p);
     }
 
     private OfertaAula oferta(Usuario prof, Disciplina disc, Modalidade mod, String valor, String comissao) {

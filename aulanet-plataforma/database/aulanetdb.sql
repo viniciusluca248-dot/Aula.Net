@@ -97,3 +97,25 @@ CREATE TABLE repasse (
     FOREIGN KEY (id_pagamento) REFERENCES pagamento(id_pagamento),
     FOREIGN KEY (id_professor) REFERENCES usuario(id_usuario)
 );
+
+-- Perfil complementar (1 : 1 com usuario): cidade, currículo e versão da foto.
+-- Previsto como trabalho futuro na seção 5.2 da monografia e implementado depois.
+CREATE TABLE perfil_usuario (
+    id_usuario     INT PRIMARY KEY,
+    cidade         VARCHAR(100) NULL,
+    uf             VARCHAR(2) NULL,
+    formacao       VARCHAR(2000) NULL,
+    experiencia    VARCHAR(2000) NULL,
+    link_curriculo VARCHAR(255) NULL,
+    foto_versao    BIGINT NULL,                    -- nulo quando o usuário não tem foto
+    FOREIGN KEY (id_usuario) REFERENCES usuario(id_usuario),
+    INDEX idx_perfil_cidade (cidade)
+);
+
+-- Foto de perfil (JPEG, PNG ou WebP, até 2 MB), separada para não pesar nas listagens.
+CREATE TABLE foto_usuario (
+    id_usuario INT PRIMARY KEY,
+    tipo       VARCHAR(30) NOT NULL,
+    conteudo   MEDIUMBLOB NOT NULL,
+    FOREIGN KEY (id_usuario) REFERENCES usuario(id_usuario)
+);
